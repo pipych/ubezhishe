@@ -1,177 +1,149 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { Shield, Plus, LogIn } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Получение или генерация анонимного ID игрока
-  const getUserId = () => {
-    let userId = localStorage.getItem('ubezhishe_user_id');
-    if (!userId) {
-      userId = crypto.randomUUID();
-      localStorage.setItem('ubezhishe_user_id', userId);
+  useEffect(() => {
+    const savedName = localStorage.getItem('ubezhishe_username');
+    if (savedName) {
+      setUsername(savedName);
     }
-    return userId;
-  };
 
-  // Генерация 6-значного кода комнаты
-  const generateRoomCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    let id = localStorage.getItem('ubezhishe_user_id');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('ubezhishe_user_id', id);
     }
-    return result;
-  };
+  }, []);
 
-  // Создание комнаты
   const handleCreateRoom = async () => {
-    if (!name.trim()) return setError('Введи имя');
+    if (!username.trim()) {
+      setError('Введите имя');
+      return;
+    }
     setLoading(true);
     setError('');
 
-    try {
-      const userId = getUserId();
-      const roomCode = generateRoomCode();
+    const userId = localStorage.getItem('ubezhishe_user_id') || crypto.randomUUID();
+    localStorage.setItem('ubezhishe_username', username.trim());
 
-      // 1. Создаем комнату
-      const { data: room, error: roomErr } = await supabase
-        .from('rooms')
-        .insert([{ code: roomCode, host_id: userId }])
-        .select()
-        .single();
+    const { data: code, error: rpcErr } = await supabase.rpc('create_room', {
+      p_host_id: userId,
+      p_host_name: username.trim(),
+    });
 
-      if (roomErr) throw roomErr;
-
-      // 2. Добавляем хоста в игроки
-      const { error: playerErr } = await supabase
-        .from('players')
-        .insert([{ room_id: room.id, user_id: userId, name: name.trim() }]);
-
-      if (playerErr) throw playerErr;
-
-      router.push(`/room/${room.code}`);
-    } catch (err: any) {
-      setError(err.message || 'Ошибка создания комнаты');
-    } finally {
+    if (rpcErr) {
+      setError(rpcErr.message);
       setLoading(false);
+    } else {
+      router.push(`/room/${code}`);
     }
   };
 
-  // Вход в существующую комнату
   const handleJoinRoom = async () => {
-    if (!name.trim()) return setError('Введи имя');
-    if (!code.trim()) return setError('Введи код комнаты');
+    if (!username.trim() || !roomCode.trim()) {
+      setError('Заполните все поля');
+      return;
+    }
     setLoading(true);
     setError('');
 
-    try {
-      const userId = getUserId();
-      const cleanCode = code.trim().toUpperCase();
+    const userId = localStorage.getItem('ubezhishe_user_id') || crypto.randomUUID();
+    const cleanCode = roomCode.trim().toUpperCase();
+    localStorage.setItem('ubezhishe_username', username.trim());
 
-      // 1. Ищем комнату
-      const { data: room, error: roomErr } = await supabase
-        .from('rooms')
-        .select('id, code')
-        .eq('code', cleanCode)
-        .single();
+    const { error: rpcErr } = await supabase.rpc('join_room', {
+      p_room_code: cleanCode,
+      p_user_id: userId,
+      p_player_name: username.trim(),
+    });
 
-      if (roomErr || !room) throw new Error('Комната не найдена');
-
-      // 2. Регистрируем игрока
-      const { error: playerErr } = await supabase
-        .from('players')
-        .upsert([{ room_id: room.id, user_id: userId, name: name.trim() }], {
-          onConflict: 'room_id,user_id',
-        });
-
-      if (playerErr) throw playerErr;
-
-      router.push(`/room/${room.code}`);
-    } catch (err: any) {
-      setError(err.message || 'Ошибка входа');
-    } finally {
+    if (rpcErr) {
+      setError(rpcErr.message);
       setLoading(false);
+    } else {
+      router.push(`/room/${cleanCode}`);
     }
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 antialiased">
-      <div className="w-full max-w-md bg-zinc-900/70 border border-zinc-800/80 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col gap-6">
-        
-        {/* Заголовок */}
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-black tracking-wider uppercase text-emerald-500">
-            Убежище
-          </h1>
-          <p className="text-xs text-zinc-400 font-medium">
-            Психологическая игра на выживание
-          </p>
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 font-sans">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-6 shadow-2xl">
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-950 border border-emerald-800 text-emerald-400 mb-2">
+            <Shield className="w-6 h-6" />
+          </div>
+          <h1 className="text-2xl font-black uppercase tracking-wider text-zinc-100">Убежище</h1>
+          <p className="text-xs text-zinc-400">Карточная игра на выживание</p>
         </div>
 
-        {/* Форма */}
+        {error && (
+          <div className="bg-rose-950/80 border border-rose-800 text-rose-200 text-xs p-3 rounded-2xl text-center">
+            {error}
+          </div>
+        )}
+
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-zinc-400 mb-1.5 px-3">
-              Имя игрока
+            <label className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider block mb-1.5">
+              Ваш никнейм
             </label>
             <input
               type="text"
-              placeholder="Введи никнейм"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-full px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition"
+              placeholder="Введите имя..."
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              maxLength={20}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
             />
           </div>
 
-          <div className="pt-2 border-t border-zinc-800/80">
-            <label className="block text-xs font-semibold text-zinc-400 mb-1.5 px-3">
-              Код комнаты (для подключения)
-            </label>
-            <input
-              type="text"
-              maxLength={6}
-              placeholder="X7K2P9"
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="w-full bg-zinc-800/60 border border-zinc-700/60 rounded-full px-4 py-2.5 text-sm text-center tracking-widest font-mono text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 transition uppercase"
-            />
-          </div>
-
-          {error && (
-            <p className="text-xs text-rose-400 text-center font-medium px-2">
-              {error}
-            </p>
-          )}
-
-          {/* Кнопки-пилюли */}
-          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-            <button
-              onClick={handleJoinRoom}
-              disabled={loading}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-semibold text-xs py-2.5 px-5 rounded-full transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-950/40"
-            >
-              Войти в игру
-            </button>
+          <div className="pt-2 border-t border-zinc-800/80 space-y-3">
             <button
               onClick={handleCreateRoom}
               disabled={loading}
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold text-xs py-2.5 px-5 rounded-full transition-all active:scale-95 disabled:opacity-50"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs py-3.5 rounded-2xl transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40"
             >
-              Создать комнату
+              <Plus className="w-4 h-4" />
+              <span>Создать новую комнату</span>
             </button>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-zinc-800"></div>
+              <span className="flex-shrink mx-3 text-[10px] text-zinc-600 font-bold uppercase">или</span>
+              <div className="flex-grow border-t border-zinc-800"></div>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="КОД"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                className="w-28 bg-zinc-950 border border-zinc-800 rounded-2xl px-3 py-3 text-xs font-mono font-bold text-center text-zinc-100 uppercase focus:outline-none focus:border-emerald-500 transition"
+              />
+              <button
+                onClick={handleJoinRoom}
+                disabled={loading}
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold text-xs py-3.5 rounded-2xl border border-zinc-700 transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Войти</span>
+              </button>
+            </div>
           </div>
         </div>
-
       </div>
     </main>
   );
 }
-
