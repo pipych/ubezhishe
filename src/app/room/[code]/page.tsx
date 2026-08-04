@@ -5,12 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
 const CARD_CATEGORIES = [
-  { key: 'profession', label: 'Профессия', icon: '💼', border: 'border-sky-500/50', bg: 'from-sky-950/80 to-zinc-900', text: 'text-sky-300' },
-  { key: 'health', label: 'Здоровье', icon: '🫀', border: 'border-emerald-500/50', bg: 'from-emerald-950/80 to-zinc-900', text: 'text-emerald-300' },
-  { key: 'hobby', label: 'Хобби', icon: '🎨', border: 'border-purple-500/50', bg: 'from-purple-950/80 to-zinc-900', text: 'text-purple-300' },
-  { key: 'baggage', label: 'Багаж', icon: '🎒', border: 'border-amber-500/50', bg: 'from-amber-950/80 to-zinc-900', text: 'text-amber-300' },
-  { key: 'fact', label: 'Факты', icon: '📜', border: 'border-indigo-500/50', bg: 'from-indigo-950/80 to-zinc-900', text: 'text-indigo-300' },
-  { key: 'special_condition', label: 'Спец. условие', icon: '⚡', border: 'border-rose-500/50', bg: 'from-rose-950/80 to-zinc-900', text: 'text-rose-300' },
+  { key: 'profession', label: 'Профессия', short: 'ПР', icon: '💼', color: 'text-sky-600', suitColor: 'text-sky-700', angle: -15, translateY: 8 },
+  { key: 'health', label: 'Здоровье', short: 'ЗД', icon: '🫀', color: 'text-rose-600', suitColor: 'text-rose-700', angle: -9, translateY: 2 },
+  { key: 'hobby', label: 'Хобби', short: 'ХБ', icon: '🎨', color: 'text-purple-600', suitColor: 'text-purple-700', angle: -3, translateY: 0 },
+  { key: 'baggage', label: 'Багаж', short: 'БГ', icon: '🎒', color: 'text-amber-600', suitColor: 'text-amber-700', angle: 3, translateY: 0 },
+  { key: 'fact', label: 'Факты', short: 'ФК', icon: '📜', color: 'text-indigo-600', suitColor: 'text-indigo-700', angle: 9, translateY: 2 },
+  { key: 'special_condition', label: 'Спец. условие', short: 'СП', icon: '⚡', color: 'text-emerald-600', suitColor: 'text-emerald-700', angle: 15, translateY: 8 },
 ];
 
 export default function RoomPage() {
@@ -274,6 +274,7 @@ export default function RoomPage() {
   const isHost = room?.host_id === userId;
   const me = players.find((p) => p.user_id === userId);
   const activePlayers = players.filter((p) => !p.is_kicked);
+  const kickedPlayers = players.filter((p) => p.is_kicked);
   const selectedPlayer = players.find((p) => p.id === selectedPlayerId);
   const isMyTurn = room?.phase === 'SPEECH' && room?.current_speaker_id === me?.id;
   const survivorsGoal = Math.ceil((room?.total_initial_players || players.length) / 2);
@@ -285,7 +286,7 @@ export default function RoomPage() {
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-56 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-72 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
       
       {/* 1. Верхний баннер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
@@ -396,11 +397,11 @@ export default function RoomPage() {
               return (
                 <div
                   key={cat.key}
-                  className={`bg-gradient-to-br ${cat.bg} border ${cat.border} rounded-2xl p-3.5 flex flex-col justify-between min-h-[90px] shadow-md`}
+                  className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 flex flex-col justify-between min-h-[90px] shadow-md"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm">{cat.icon}</span>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${cat.text}`}>{cat.label}</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${cat.suitColor}`}>{cat.label}</span>
                   </div>
                   <p className="text-xs font-semibold text-zinc-100 leading-tight mt-2">
                     {isRevealed ? val : '••••••••••••'}
@@ -412,12 +413,12 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 5. Управление фазами */}
+      {/* 5. Фазы */}
       {room?.phase === 'SPEECH' && (
         <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
           {isMyTurn ? (
             <p className="text-xs text-emerald-400 font-bold animate-pulse uppercase tracking-wider">
-              🗣️ Ваша очередь выступать! Нажмите «Раскрыть» на одной из своих карт внизу.
+              🗣️ Ваша очередь выступать! Нажмите «Раскрыть» на своей карте из колоды внизу.
             </p>
           ) : (
             <p className="text-xs text-zinc-400">
@@ -480,41 +481,65 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. ЛИЧНАЯ КОЛОДА КАРТ (Фиксированный Низ) */}
-      {room?.phase !== 'LOBBY' && myCard && (
-        <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-2xl p-3 z-50">
-          <div className="max-w-5xl mx-auto space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Твоя колода карт</span>
-              {isMyTurn && <span className="text-[10px] bg-emerald-500 text-zinc-950 font-bold px-2.5 py-0.5 rounded-full animate-bounce">ТВОЙ ХОД!</span>}
+      {/* 6. ИГРАЛЬНАЯ КОЛОДА КАРТ В РУКЕ */}
+      {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none pb-2 pt-10 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent">
+          <div className="max-w-4xl mx-auto px-4 pointer-events-auto relative">
+            
+            <div className="flex items-center justify-center mb-2">
+              {isMyTurn ? (
+                <span className="bg-emerald-500 text-zinc-950 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-lg shadow-emerald-500/30 animate-bounce">
+                  ⚡ Ваш ход! Раскройте одну карту
+                </span>
+              ) : (
+                <span className="bg-zinc-900/90 border border-zinc-800 text-zinc-400 text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md">
+                  Ваша рука (Колода)
+                </span>
+              )}
             </div>
 
-            <div className="flex gap-2.5 overflow-x-auto pb-2 pt-1 px-1 scrollbar-thin scrollbar-thumb-zinc-800">
-              {CARD_CATEGORIES.map((cat) => {
+            <div className="flex justify-center items-end -space-x-8 sm:-space-x-12 min-h-[220px] pt-4 pb-2">
+              {CARD_CATEGORIES.map((cat, index) => {
                 const item = myCard[cat.key];
                 const isSelected = activeDeckCard === cat.key;
+
                 return (
                   <div
                     key={cat.key}
                     onClick={() => setActiveDeckCard(isSelected ? null : cat.key)}
-                    className={`w-36 sm:w-40 bg-gradient-to-br ${cat.bg} border ${cat.border} rounded-2xl p-3 flex flex-col justify-between shrink-0 transition-all duration-300 cursor-pointer shadow-xl ${
-                      isSelected ? '-translate-y-3 scale-105 border-white shadow-2xl' : 'hover:-translate-y-1'
+                    style={{
+                      transform: isSelected
+                        ? 'translateY(-48px) rotate(0deg) scale(1.12)'
+                        : `translateY(${cat.translateY}px) rotate(${cat.angle}deg)`,
+                      zIndex: isSelected ? 40 : index + 10,
+                    }}
+                    className={`group relative w-32 sm:w-36 h-48 sm:h-52 bg-slate-50 border-2 border-slate-300 rounded-xl p-2.5 flex flex-col justify-between shadow-2xl transition-all duration-300 ease-out cursor-pointer select-none ${
+                      isSelected
+                        ? 'ring-4 ring-emerald-500/80 shadow-emerald-900/50'
+                        : 'hover:-translate-y-12 hover:rotate-0 hover:z-30 hover:scale-105 hover:ring-2 hover:ring-amber-400'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs">{cat.icon}</span>
-                      <span className={`text-[9px] font-bold uppercase ${cat.text}`}>{cat.label}</span>
+                    <div className="absolute inset-1 rounded-lg border border-slate-200/80 pointer-events-none" />
+
+                    <div className="flex flex-col items-start leading-none font-black font-mono">
+                      <span className={`text-xs sm:text-sm font-extrabold ${cat.color}`}>{cat.short}</span>
+                      <span className="text-xs sm:text-sm mt-0.5">{cat.icon}</span>
                     </div>
 
-                    <p className="text-xs font-bold text-zinc-100 my-2 leading-tight">
-                      {item?.val}
-                    </p>
+                    <div className="my-auto text-center px-1 z-10 space-y-1">
+                      <p className={`text-[9px] font-extrabold uppercase tracking-wider ${cat.color}`}>
+                        {cat.label}
+                      </p>
+                      <p className="text-xs font-bold text-slate-900 leading-tight">
+                        {item?.val}
+                      </p>
+                    </div>
 
-                    <div>
+                    <div className="z-10 mt-1">
                       {item?.revealed ? (
-                        <span className="text-[9px] bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 px-2 py-0.5 rounded-full block text-center">
+                        <div className="w-full bg-slate-200 text-slate-500 text-[9px] font-bold py-1 rounded-md text-center border border-slate-300 uppercase">
                           Открыта
-                        </span>
+                        </div>
                       ) : (
                         <button
                           onClick={(e) => {
@@ -522,16 +547,95 @@ export default function RoomPage() {
                             handleRevealCard(cat.key);
                           }}
                           disabled={!isMyTurn || actionLoading}
-                          className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-[10px] font-extrabold py-1.5 rounded-full transition active:scale-95 disabled:opacity-30 disabled:hover:bg-emerald-500"
+                          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-extrabold py-1.5 rounded-md transition shadow-md active:scale-95 disabled:opacity-30 disabled:hover:bg-emerald-600"
                         >
                           Раскрыть
                         </button>
                       )}
                     </div>
+
+                    <div className="flex flex-col items-end leading-none font-black font-mono rotate-180">
+                      <span className={`text-xs sm:text-sm font-extrabold ${cat.color}`}>{cat.short}</span>
+                      <span className="text-xs sm:text-sm mt-0.5">{cat.icon}</span>
+                    </div>
                   </div>
                 );
               })}
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 7. ОКНО РЕЗУЛЬТАТОВ ИГРЫ (Окончание) */}
+      {room?.phase === 'ENDED' && (
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl">
+            <div>
+              {me?.is_kicked ? (
+                <div className="space-y-2">
+                  <span className="text-5xl">💀</span>
+                  <h2 className="text-2xl font-black text-rose-500 uppercase tracking-wide">
+                    Вы не выжили
+                  </h2>
+                  <p className="text-xs text-zinc-400">
+                    Вас не пустили в бункер. Вы остались снаружи.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <span className="text-5xl">🎉</span>
+                  <h2 className="text-2xl font-black text-emerald-400 uppercase tracking-wide">
+                    Вы выжили!
+                  </h2>
+                  <p className="text-xs text-zinc-400">
+                    Поздравляем! Вы вошли в число тех, кто попал в бункер.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Списки выживших и погибших */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div className="bg-emerald-950/30 border border-emerald-900/50 rounded-2xl p-4 space-y-2">
+                <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🛡️</span> Выжили ({activePlayers.length})
+                </h3>
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {activePlayers.map((p) => (
+                    <li key={p.id} className="text-xs text-zinc-200 font-medium flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      {p.name} {p.user_id === userId && <span className="text-[10px] text-emerald-400 font-bold">(Вы)</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="bg-rose-950/30 border border-rose-900/50 rounded-2xl p-4 space-y-2">
+                <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🪦</span> Погибли ({kickedPlayers.length})
+                </h3>
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {kickedPlayers.length === 0 ? (
+                    <li className="text-xs text-zinc-500 italic">Никто не погиб</li>
+                  ) : (
+                    kickedPlayers.map((p) => (
+                      <li key={p.id} className="text-xs text-zinc-400 font-medium flex items-center gap-2 line-through">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        {p.name} {p.user_id === userId && <span className="text-[10px] text-rose-400 font-bold">(Вы)</span>}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            </div>
+
+            <button
+              onClick={() => router.push('/')}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-bold text-xs py-3 rounded-2xl border border-zinc-700 transition active:scale-95 shadow-lg"
+            >
+              Вернуться на главную
+            </button>
           </div>
         </div>
       )}
