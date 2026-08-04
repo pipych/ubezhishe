@@ -417,6 +417,16 @@ export default function RoomPage() {
     setActionLoading(false);
   };
 
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  const handleCopyInvite = () => {
+    const link = `${window.location.origin}/join/${room?.code}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    });
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
@@ -464,16 +474,6 @@ export default function RoomPage() {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const [inviteCopied, setInviteCopied] = useState(false);
-
-  const handleCopyInvite = () => {
-    const link = `${window.location.origin}/join/${room?.code}`;
-    navigator.clipboard.writeText(link).then(() => {
-      setInviteCopied(true);
-      setTimeout(() => setInviteCopied(false), 2000);
-    });
   };
 
   const OverlayIcon = cardRevealOverlay
