@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Shield, LogIn, ArrowLeft } from 'lucide-react';
@@ -16,28 +16,7 @@ export default function JoinPage() {
   const [error, setError] = useState('');
   const [needName, setNeedName] = useState(false);
 
-  useEffect(() => {
-    // Создаём user ID если нет
-    let id = localStorage.getItem('ubezhishe_user_id');
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem('ubezhishe_user_id', id);
-    }
-
-    // Проверяем сохранённый ник
-    const savedName = localStorage.getItem('ubezhishe_username');
-    if (savedName) {
-      // Ник есть — авто-вход
-      setUsername(savedName);
-      autoJoin(savedName, id);
-    } else {
-      // Ника нет — показываем форму
-      setNeedName(true);
-      setLoading(false);
-    }
-  }, []);
-
-  const autoJoin = async (name: string, userId: string) => {
+  const autoJoin = useCallback(async (name: string, userId: string) => {
     setJoining(true);
     setError('');
 
@@ -56,7 +35,26 @@ export default function JoinPage() {
       localStorage.setItem('ubezhishe_username', name.trim());
       router.push(`/room/${roomCode}`);
     }
-  };
+  }, [roomCode, router]);
+
+  useEffect(() => {
+    if (!roomCode) return;
+
+    let id = localStorage.getItem('ubezhishe_user_id');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('ubezhishe_user_id', id);
+    }
+
+    const savedName = localStorage.getItem('ubezhishe_username');
+    if (savedName) {
+      setUsername(savedName);
+      autoJoin(savedName, id);
+    } else {
+      setNeedName(true);
+      setLoading(false);
+    }
+  }, [roomCode, autoJoin]);
 
   const handleJoin = async () => {
     if (!username.trim()) {
