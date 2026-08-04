@@ -431,6 +431,29 @@ export default function RoomPage() {
   const isMyTurn = room?.phase === 'SPEECH' && room?.current_speaker_id === me?.id;
   const survivorsGoal = Math.ceil((room?.total_initial_players || players.length) / 2);
   const hasSkippedDiscussion = room?.skip_votes?.includes(userId);
+  const skipVotesCount = room?.skip_votes?.length || 0;
+
+  // Сегменты для кольца скипа
+  const skipRingSegments = (() => {
+    const total = activePlayers.length;
+    if (total === 0) return [];
+    const outerR = 26, innerR = 20, cx = 32, cy = 32;
+    const segAngle = (2 * Math.PI) / total;
+    const gap = 0.08;
+    return Array.from({ length: total }).map((_, i) => {
+      const sa = i * segAngle + gap;
+      const ea = (i + 1) * segAngle - gap;
+      const x1o = cx + outerR * Math.cos(sa), y1o = cy + outerR * Math.sin(sa);
+      const x2o = cx + outerR * Math.cos(ea), y2o = cy + outerR * Math.sin(ea);
+      const x1i = cx + innerR * Math.cos(sa), y1i = cy + innerR * Math.sin(sa);
+      const x2i = cx + innerR * Math.cos(ea), y2i = cy + innerR * Math.sin(ea);
+      const la = ea - sa > Math.PI ? 1 : 0;
+      return {
+        d: `M${x1o.toFixed(1)} ${y1o.toFixed(1)} A${outerR} ${outerR} 0 ${la} 1 ${x2o.toFixed(1)} ${y2o.toFixed(1)} L${x2i.toFixed(1)} ${y2i.toFixed(1)} A${innerR} ${innerR} 0 ${la} 0 ${x1i.toFixed(1)} ${y1i.toFixed(1)} Z`,
+        filled: i < skipVotesCount,
+      };
+    });
+  })();
 
   const readyUserIds = room?.bunker_info?.ready_user_ids || [];
   const hasPressedReady = readyUserIds.includes(userId);
@@ -854,20 +877,25 @@ export default function RoomPage() {
 
             <div className="grid grid-cols-2 gap-2.5 max-h-60 overflow-y-auto">
               {activePlayers
-                .filter((p) => p.user_id !== userId)
-                .map((p) => (
+                .map((p) => {
+                  const isSelf = p.user_id === userId;
+                  return (
                   <button
                     key={p.id}
-                    onClick={() => setSelectedTarget(p.id)}
-                    className={`p-3.5 rounded-2xl border text-xs font-bold text-left transition ${
-                      selectedTarget === p.id
-                        ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-lg shadow-rose-950/50 scale-102'
-                        : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                    onClick={() => !isSelf && setSelectedTarget(p.id)}
+                    disabled={isSelf}
+                    className={`p-3.5 rounded-2xl border text-xs font-bold text-left transition flex items-center justify-between ${
+                      isSelf
+                        ? 'bg-zinc-900/50 border-zinc-800 text-zinc-500 cursor-not-allowed opacity-60'
+                        : selectedTarget === p.id
+                          ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-lg shadow-rose-950/50 scale-102'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
-                    {p.name}
+                    <span>{p.name}</span>
+                    {isSelf && <span className="text-[9px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded-full font-medium">Вы</span>}
                   </button>
-                ))}
+                )})}
             </div>
 
             <button
@@ -1018,18 +1046,37 @@ export default function RoomPage() {
             </button>
 
             {room?.phase === 'DISCUSSION' && (
-              <button
-                onClick={handleSkipDiscussion}
-                disabled={actionLoading || hasSkippedDiscussion}
-                title="Пропустить обсуждение"
-                className={`w-12 h-12 rounded-full shrink-0 flex items-center justify-center transition border shadow-xl ${
-                  hasSkippedDiscussion
-                    ? 'bg-amber-950/40 border-amber-800/50 text-amber-600 opacity-60'
-                    : 'bg-amber-500 hover:bg-amber-400 border-amber-300 text-zinc-950 animate-pulse active:scale-90'
-                }`}
-              >
-                <SkipForward className="w-5 h-5 fill-current" />
-              </button>
+              <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+                {/* Сегментированное кольцо */}
+                <svg viewBox="0 0 64 64" className="absolute inset-0 w-full h-full -rotate-90">
+                  {skipRingSegments.map((seg, i) => (
+                    <path
+                      key={i}
+                      d={seg.d}
+                      fill={seg.filled ? '#f59e0b' : '#27272a'}
+                      stroke={seg.filled ? '#d97706' : '#3f3f46'}
+                      strokeWidth="0.5"
+                      className="transition-colors duration-300"
+                    />
+                  ))}
+                </svg>
+                {/* Счётчик внутри кольца */}
+                <span className="absolute -top-1 -right-1 z-20 bg-zinc-800 text-[9px] font-black text-amber-400 w-5 h-5 rounded-full flex items-center justify-center border border-zinc-700 shadow-md">
+                  {skipVotesCount}/{activePlayers.length}
+                </span>
+                <button
+                  onClick={handleSkipDiscussion}
+                  disabled={actionLoading || hasSkippedDiscussion}
+                  title="Пропустить обсуждение"
+                  className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center transition border shadow-xl ${
+                    hasSkippedDiscussion
+                      ? 'bg-amber-950/40 border-amber-800/50 text-amber-600 opacity-60'
+                      : 'bg-amber-500 hover:bg-amber-400 border-amber-300 text-zinc-950 active:scale-90'
+                  }`}
+                >
+                  <SkipForward className="w-4 h-4 fill-current" />
+                </button>
+              </div>
             )}
 
             <button
