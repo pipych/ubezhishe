@@ -13,7 +13,10 @@ export default function RoomPage() {
   const [room, setRoom] = useState<any>(null);
   const [players, setPlayers] = useState<any[]>([]);
   const [myCard, setMyCard] = useState<any>(null);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
+  const [myVote, setMyVote] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -26,10 +29,8 @@ export default function RoomPage() {
     initRoom(id);
   }, [roomCode]);
 
-  // Загрузка данных комнаты и игроков
   const initRoom = async (currentUserId: string) => {
     try {
-      // 1. Получение комнаты
       const { data: roomData, error: roomErr } = await supabase
         .from('rooms')
         .select('*')
@@ -39,10 +40,8 @@ export default function RoomPage() {
       if (roomErr || !roomData) throw new Error('Комната не найдена');
       setRoom(roomData);
 
-      // 2. Получение игроков
       fetchPlayers(roomData.id);
 
-      // 3. Подписка на Realtime
       const channel = supabase
         .channel(`room_${roomData.id}`)
         .on(
@@ -55,11 +54,16 @@ export default function RoomPage() {
           { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${roomData.id}` },
           () => fetchPlayers(roomData.id)
         )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'votes', filter: `room_id=eq.${roomData.id}` },
+          () => fetchVotes(roomData.id, currentUserId)
+        )
         .subscribe();
 
-      // 4. Если игра уже началась — грузим карты
       if (roomData.phase !== 'LOBBY') {
         fetchMyCard(roomData.id, currentUserId);
+        fetchVotes(roomData.id, currentUserId);
       }
 
       return () => {
@@ -96,14 +100,39 @@ export default function RoomPage() {
     if (card) setMyCard(card);
   };
 
-  // Запуск игры (только для хоста)
-  const handleStartGame = async () => {
-    if (!room) return;
-    const { error: rpcErr } = await supabase.rpc('start_game', { p_room_id: room.id });
-    if (rpcErr) setError(rpcErr.message);
+  const fetchVotes = async (roomId: string, currentUserId: string) => {
+    const { data: myPlayer } = await supabase
+      .from('players')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('user_id', currentUserId)
+      .single();
+
+    if (!myPlayer) return;
+
+    const { data: vote } = await supabase
+      .from('votes')
+      .select('target_id')
+      .eq('room_id', roomId)
+      .eq('voter_id', myPlayer.id)
+      .single();
+
+    if (vote) {
+      setMyVote(vote.target_id);
+      setSelectedTarget(vote.target_id);
+    } else {
+      setMyVote(null);
+    }
   };
 
-  // Открытие характеристики
+  const handleStartGame = async () => {
+    if (!room) return;
+    setActionLoading(true);
+    const { error: rpcErr } = await supabase.rpc('start_game', { p_room_id: room.id });
+    if (rpcErr) setError(rpcErr.message);
+    setActionLoading(false);
+  };
+
   const handleRevealField = async (fieldKey: string) => {
     if (!myCard) return;
     const updatedField = { ...myCard[fieldKey], revealed: true };
@@ -116,6 +145,40 @@ export default function RoomPage() {
     if (!updateErr) {
       setMyCard((prev: any) => ({ ...prev, [fieldKey]: updatedField }));
     }
+  };
+
+  // Отправка голоса
+  const handleCastVote = async () => {
+    if (!selectedTarget || !room) return;
+    setActionLoading(true);
+    setError('');
+
+    const { error: rpcErr } = await supabase.rpc('cast_vote', {
+      p_room_id: room.id,
+      p_voter_user_id: userId,
+      p_target_player_id: selectedTarget,
+    });
+
+    if (rpcErr) {
+      setError(rpcErr.message);
+    } else {
+      setMyVote(selectedTarget);
+    }
+    setActionLoading(false);
+  };
+
+  // Подсчет голосов и исключение (Хост)
+  const handleTallyAndKick = async () => {
+    if (!room) return;
+    setActionLoading(true);
+    setError('');
+
+    const { error: rpcErr } = await supabase.rpc('tally_votes_and_kick', {
+      p_room_id: room.id,
+    });
+
+    if (rpcErr) setError(rpcErr.message);
+    setActionLoading(false);
   };
 
   if (loading) {
@@ -131,16 +194,18 @@ export default function RoomPage() {
       <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 gap-4">
         <p className="text-xs text-rose-400 font-medium">{error}</p>
         <button
-          onClick={() => router.push('/')}
+          onClick={() => setError('')}
           className="bg-zinc-800 text-zinc-200 text-xs px-5 py-2.5 rounded-full border border-zinc-700"
         >
-          На главную
+          Закрыть
         </button>
       </main>
     );
   }
 
   const isHost = room?.host_id === userId;
+  const me = players.find((p) => p.user_id === userId);
+  const activePlayers = players.filter((p) => !p.is_kicked);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6 max-w-4xl mx-auto flex flex-col gap-6">
@@ -154,18 +219,33 @@ export default function RoomPage() {
               {room?.code}
             </span>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">Фаза: <span className="text-zinc-200 font-semibold">{room?.phase}</span></p>
+          <p className="text-xs text-zinc-400 mt-1">
+            Фаза: <span className="text-zinc-200 font-semibold">{room?.phase}</span>
+          </p>
         </div>
 
         {isHost && room?.phase === 'LOBBY' && (
           <button
             onClick={handleStartGame}
-            className="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs px-6 py-2.5 rounded-full transition active:scale-95 shadow-lg shadow-emerald-950/40"
+            disabled={actionLoading}
+            className="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs px-6 py-2.5 rounded-full transition active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-950/40"
           >
             Начать игру ({players.length} игрок.)
           </button>
         )}
       </div>
+
+      {/* Уведомление для изгнанного игрока */}
+      {me?.is_kicked && (
+        <div className="bg-rose-950/40 border border-rose-900/60 rounded-3xl p-4 text-center">
+          <p className="text-xs text-rose-300 font-semibold uppercase tracking-wider">
+            Вас изгнали из бункера
+          </p>
+          <p className="text-[11px] text-zinc-400 mt-1">
+            Вы больше не можете голосовать, но можете следить за ходом игры.
+          </p>
+        </div>
+      )}
 
       {/* Список игроков в Лобби */}
       {room?.phase === 'LOBBY' && (
@@ -187,6 +267,63 @@ export default function RoomPage() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Блок голосования */}
+      {room?.phase === 'VOTING' && !me?.is_kicked && (
+        <div className="bg-zinc-900/60 border border-rose-900/40 backdrop-blur-xl rounded-3xl p-5 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-rose-400 uppercase tracking-wider">
+              Голосование за изгнание
+            </h2>
+            {myVote && (
+              <span className="text-[10px] bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 px-2.5 py-0.5 rounded-full font-medium">
+                Голос зафиксирован
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+            {activePlayers
+              .filter((p) => p.user_id !== userId)
+              .map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedTarget(p.id)}
+                  className={`p-3 rounded-2xl border text-left text-xs font-semibold transition-all flex items-center justify-between ${
+                    selectedTarget === p.id
+                      ? 'bg-rose-950/60 border-rose-500 text-rose-100 shadow-md shadow-rose-950/50'
+                      : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-300 hover:bg-zinc-800/80'
+                  }`}
+                >
+                  <span>{p.name}</span>
+                  {selectedTarget === p.id && (
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                  )}
+                </button>
+              ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
+            <button
+              onClick={handleCastVote}
+              disabled={!selectedTarget || actionLoading}
+              className="bg-rose-600 hover:bg-rose-500 text-zinc-950 font-bold text-xs px-6 py-2.5 rounded-full transition active:scale-95 disabled:opacity-40"
+            >
+              {myVote ? 'Изменить голос' : 'Отдать голос'}
+            </button>
+
+            {isHost && (
+              <button
+                onClick={handleTallyAndKick}
+                disabled={actionLoading}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-semibold text-xs px-5 py-2.5 rounded-full transition active:scale-95 disabled:opacity-50"
+              >
+                Подвести итоги и изгнать
+              </button>
+            )}
           </div>
         </div>
       )}
