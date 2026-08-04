@@ -31,7 +31,8 @@ import {
   DoorOpen,
   DoorClosed,
   Home,
-  Dna
+  Dna,
+  Copy
 } from 'lucide-react';
 
 const CARD_CATEGORIES = [
@@ -65,6 +66,7 @@ export default function RoomPage() {
 
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [editingName, setEditingName] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
 
   // Оверлеи
   const [cardRevealOverlay, setCardRevealOverlay] = useState<any>(null);
@@ -357,6 +359,13 @@ export default function RoomPage() {
     setActionLoading(false);
   };
 
+  const handleCopyInvite = () => {
+    const url = `${window.location.origin}/join/${roomCode}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleRevealCard = async (fieldKey: string) => {
     if (!room || !myCard) return;
     setActionLoading(true);
@@ -455,9 +464,28 @@ export default function RoomPage() {
       {/* 1. Верхний баннер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
         <div className="flex items-center gap-3">
-          <span className="bg-emerald-950 text-emerald-400 font-mono text-xs font-bold px-3 py-1 rounded-full border border-emerald-800/50">
-            {room?.code}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-emerald-950 text-emerald-400 font-mono text-xs font-bold px-3 py-1 rounded-full border border-emerald-800/50">
+              {room?.code}
+            </span>
+            <button
+              onClick={handleCopyInvite}
+              className="p-1.5 bg-zinc-950 border border-zinc-800 hover:border-zinc-700 rounded-xl text-zinc-400 hover:text-emerald-400 transition flex items-center gap-1.5 text-xs font-medium"
+              title="Скопировать ссылку-приглашение"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400 font-bold hidden sm:inline">Скопировано!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span className="text-[10px] text-zinc-400 hidden sm:inline">Ссылка</span>
+                </>
+              )}
+            </button>
+          </div>
           <div>
             <h1 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
               Раунд {room?.round_number || 1} • <span className="text-emerald-400">{room?.phase}</span>
