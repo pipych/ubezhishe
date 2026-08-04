@@ -133,24 +133,9 @@ export default function RoomPage() {
     setTimeout(() => setRoomRevealOverlay(null), 5000);
   };
 
-  const showVoteResults = async (roomId: string) => {
-    const { data: allVotes } = await supabase.from('votes').select('target_id').eq('room_id', roomId);
-    const { data: allPlayers } = await supabase.from('players').select('id, name, is_kicked').eq('room_id', roomId);
-
-    if (allPlayers) {
-      const counts: { [key: string]: number } = {};
-      allVotes?.forEach((v) => {
-        counts[v.target_id] = (counts[v.target_id] || 0) + 1;
-      });
-
-      const summary = allPlayers
-        .map((p) => ({
-          name: p.name,
-          votes: counts[p.id] || 0,
-          isKicked: p.is_kicked,
-        }))
-        .sort((a, b) => b.votes - a.votes);
-
+const showVoteResults = (roomData: any) => {
+    const summary = roomData?.bunker_info?.last_voting_results;
+    if (summary && Array.isArray(summary) && summary.length > 0) {
       setVoteResultsOverlay(summary);
       setTimeout(() => setVoteResultsOverlay(null), 5000);
     }
@@ -158,6 +143,58 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!room?.id || !userId) return;
+
+    const channel = supabase
+      .channel(`realtime_room_${room.id}`, { config: { broadcast: { self: true } } })
+      .on('broadcast', { event: 'card_revealed' }, (payload) => {
+        if (payload?.payload) showCardOverlay(payload.payload);
+      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` },
+        (payload: any) => {
+          const newRoom = payload.new;
+          if (prevPhaseRef.current === 'VOTING' && newRoom.phase !== 'VOTING') {
+            showVoteResults(newRoom);
+          }
+
+          const newRoomsArr = newRoom.bunker_info?.revealed_rooms || [];
+          
+          if (
+            (prevPhaseRef.current === 'START_OVERLAY' && newRoom.phase === 'SPEECH' && newRoomsArr.length > 0) ||
+            (newRoomsArr.length > prevRoomsCountRef.current && newRoomsArr.length > 0)
+          ) {
+            showRoomOverlay(newRoomsArr[newRoomsArr.length - 1]);
+          }
+
+          prevRoomsCountRef.current = newRoomsArr.length;
+          prevPhaseRef.current = newRoom.phase;
+
+          setRoom(newRoom);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` },
+        () => fetchPlayers(room.id)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'player_cards' },
+        () => {
+          fetchMyCard(room.id, userId);
+          if (selectedPlayerIdRef.current) fetchInspectedCards(selectedPlayerIdRef.current);
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [room?.id, userId]);
 
     const channel = supabase
       .channel(`realtime_room_${room.id}`, { config: { broadcast: { self: true } } })
