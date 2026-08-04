@@ -461,6 +461,31 @@ export default function RoomPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-80 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
       
+      {/* Глобальные стили анимаций оверлеев и прогресс-баров */}
+      <style jsx global>{`
+        @keyframes shrink {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
+        @keyframes overlayIn {
+          from { opacity: 0; transform: scale(0.94); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes backdropIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-overlay-in {
+          animation: overlayIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-backdrop-in {
+          animation: backdropIn 0.2s ease-out forwards;
+        }
+        .animate-shrink-5s {
+          animation: shrink 5000ms linear forwards;
+        }
+      `}</style>
+
       {/* 1. Верхний баннер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
         <div className="flex items-center gap-3">
@@ -792,8 +817,8 @@ export default function RoomPage() {
 
       {/* 4. СТАРТОВЫЙ ОВЕРЛЕЙ КАТАСТРОФЫ И ЦЕЛИ (НА ВЕСЬ ЭКРАН) */}
       {room?.phase === 'START_OVERLAY' && (
-        <div className="fixed inset-0 bg-zinc-950/95 backdrop-blur-2xl z-[130] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-5 text-left overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 bg-zinc-950/95 backdrop-blur-2xl z-[130] flex items-center justify-center p-4 animate-backdrop-in">
+          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-5 text-left overflow-y-auto max-h-[90vh] animate-overlay-in">
             
             <div className="text-center space-y-1">
               <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-full border border-amber-800">
@@ -845,19 +870,26 @@ export default function RoomPage() {
               </div>
             </div>
 
-            <div className="pt-2 space-y-3 text-center">
-              <p className="text-[11px] text-zinc-400">
+            {/* Движущийся индикатор готовности игроков */}
+            <div className="space-y-1.5 pt-1">
+              <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-800 p-0.5">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((readyUserIds.length / Math.max(1, activePlayers.length)) * 100)}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-zinc-400 text-center">
                 Готовы начать: <span className="text-emerald-400 font-bold">{readyUserIds.length}</span> из <span className="text-zinc-200 font-bold">{activePlayers.length}</span> игроков
               </p>
-
-              <button
-                onClick={handleReadyStart}
-                disabled={actionLoading || hasPressedReady}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs py-3.5 rounded-2xl transition active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-950/50 uppercase tracking-wider"
-              >
-                {hasPressedReady ? 'Ожидание остальных игроков...' : 'Дальше'}
-              </button>
             </div>
+
+            <button
+              onClick={handleReadyStart}
+              disabled={actionLoading || hasPressedReady}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs py-3.5 rounded-2xl transition active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-950/50 uppercase tracking-wider"
+            >
+              {hasPressedReady ? 'Ожидание остальных игроков...' : 'Дальше'}
+            </button>
 
           </div>
         </div>
@@ -865,8 +897,8 @@ export default function RoomPage() {
 
       {/* 5. ОВЕРЛЕЙ РАСКРЫТОЙ КОМНАТЫ БУНКЕРА (5 СЕКУНД) */}
       {roomRevealOverlay && (
-        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[128] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-sky-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(14,165,233,0.2)] text-center space-y-5">
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[128] flex items-center justify-center p-4 animate-backdrop-in">
+          <div className="bg-zinc-900 border-2 border-sky-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(14,165,233,0.2)] text-center space-y-5 animate-overlay-in">
             <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 bg-sky-950 px-3 py-1 rounded-full border border-sky-800">
               Новое помещение бункера!
             </span>
@@ -896,9 +928,9 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* Движущийся прогресс-бар без цифр */}
+            {/* Движущийся прогресс-бар */}
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-sky-500 h-full w-full animate-[shrink_5000ms_linear_forwards]" />
+              <div className="bg-sky-500 h-full w-full animate-shrink-5s" />
             </div>
           </div>
         </div>
@@ -906,8 +938,8 @@ export default function RoomPage() {
 
       {/* 6. ОВЕРЛЕЙ ГОЛОСОВАНИЯ (20 СЕКУНД) */}
       {room?.phase === 'VOTING' && !me?.is_kicked && (
-        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[110] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-rose-900/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl text-center relative">
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[110] flex items-center justify-center p-4 animate-backdrop-in">
+          <div className="bg-zinc-900 border-2 border-rose-900/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl text-center relative animate-overlay-in">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-2 text-rose-400 font-extrabold uppercase text-xs tracking-wider">
                 <Vote className="w-5 h-5" />
@@ -916,6 +948,14 @@ export default function RoomPage() {
               <span className="font-mono text-xs bg-rose-950 text-rose-300 font-bold px-3 py-1 rounded-full border border-rose-800/50">
                 {timeLeft}с
               </span>
+            </div>
+
+            {/* Динамический таймер-прогресс-бар для 20 сек */}
+            <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+              <div
+                className="bg-rose-500 h-full transition-all duration-1000 linear"
+                style={{ width: `${Math.min(100, Math.max(0, (timeLeft / 20) * 100))}%` }}
+              />
             </div>
 
             <p className="text-xs text-zinc-400 text-left">
@@ -958,8 +998,8 @@ export default function RoomPage() {
 
       {/* 7. ОВЕРЛЕЙ ИТОГОВ ГОЛОСОВАНИЯ В ВИДЕ СЕТКИ ПЛАШЕК С КВАДРАТИКАМИ (5 СЕКУНД) */}
       {voteResultsOverlay && (
-        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[125] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative">
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[125] flex items-center justify-center p-4 animate-backdrop-in">
+          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative animate-overlay-in">
             <div className="space-y-1">
               <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-full border border-amber-800">
                 Результаты голосования
@@ -990,8 +1030,9 @@ export default function RoomPage() {
               ))}
             </div>
 
+            {/* Движущийся прогресс-бар */}
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-amber-500 h-full w-full animate-[shrink_5000ms_linear_forwards]" />
+              <div className="bg-amber-500 h-full w-full animate-shrink-5s" />
             </div>
           </div>
         </div>
@@ -1128,8 +1169,8 @@ export default function RoomPage() {
 
       {/* 9. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
       {cardRevealOverlay && (
-        <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-[120] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-emerald-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center relative overflow-hidden space-y-4">
+        <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-backdrop-in">
+          <div className="bg-zinc-900 border-2 border-emerald-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center relative overflow-hidden space-y-4 animate-overlay-in">
             <div className="space-y-1">
               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-950 px-3 py-1 rounded-full border border-emerald-800">
                 Карта раскрыта!
@@ -1149,8 +1190,9 @@ export default function RoomPage() {
               </p>
             </div>
 
+            {/* Движущийся прогресс-бар */}
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-emerald-500 h-full w-full animate-[shrink_5000ms_linear_forwards]" />
+              <div className="bg-emerald-500 h-full w-full animate-shrink-5s" />
             </div>
           </div>
         </div>
@@ -1158,8 +1200,8 @@ export default function RoomPage() {
 
       {/* 10. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
       {room?.phase === 'ENDED' && (
-        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl">
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4 animate-backdrop-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl animate-overlay-in">
             <div>
               {me?.is_kicked ? (
                 <div className="space-y-2 flex flex-col items-center">
