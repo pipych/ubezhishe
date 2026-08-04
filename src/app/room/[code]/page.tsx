@@ -70,7 +70,7 @@ export default function RoomPage() {
     fetchInitialRoom();
   }, [roomCode, userId]);
 
-  // 3. Подписка на Realtime (Изолированная)
+  // 3. Подписка Realtime
   useEffect(() => {
     if (!room?.id || !userId) return;
 
@@ -117,7 +117,7 @@ export default function RoomPage() {
       setTimeLeft(diff);
 
       if (diff === 0 && room.host_id === userId && room.phase !== 'LOBBY' && room.phase !== 'ENDED') {
-        supabase.rpc('handle_phase_timeout', { p_room_id: room.id });
+        supabase.rpc('handle_phase_timeout', { p_room_id: room.id }).then(() => refreshRoomState(room.id));
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -136,6 +136,11 @@ export default function RoomPage() {
       fetchInspectedCards(selectedPlayerId);
     }
   }, [selectedPlayerId]);
+
+  const refreshRoomState = async (roomId: string) => {
+    const { data: freshRoom } = await supabase.from('rooms').select('*').eq('id', roomId).single();
+    if (freshRoom) setRoom(freshRoom);
+  };
 
   const fetchPlayers = async (roomId: string) => {
     const { data } = await supabase.from('players').select('*').eq('room_id', roomId);
@@ -201,9 +206,10 @@ export default function RoomPage() {
 
     const { error: rpcErr } = await supabase.rpc('start_game', { p_room_id: room.id });
     if (rpcErr) {
-      setError(rpcErr.message);
+      setError(`Ошибка запуска: ${rpcErr.message}`);
     } else {
-      setTimeout(() => fetchMyCard(room.id, userId), 300);
+      await refreshRoomState(room.id);
+      await fetchMyCard(room.id, userId);
     }
     setActionLoading(false);
   };
@@ -219,26 +225,41 @@ export default function RoomPage() {
       p_field_key: fieldKey,
     });
 
-    if (err) setError(err.message);
+    if (err) {
+      setError(err.message);
+    } else {
+      await refreshRoomState(room.id);
+      await fetchMyCard(room.id, userId);
+    }
     setActionLoading(false);
   };
 
   const handleSkipDiscussion = async () => {
     if (!room) return;
     setActionLoading(true);
-    await supabase.rpc('skip_discussion', { p_room_id: room.id, p_user_id: userId });
+    const { error: err } = await supabase.rpc('skip_discussion', { p_room_id: room.id, p_user_id: userId });
+    if (err) {
+      setError(err.message);
+    } else {
+      await refreshRoomState(room.id);
+    }
     setActionLoading(false);
   };
 
   const handleCastVote = async () => {
     if (!selectedTarget || !room) return;
     setActionLoading(true);
-    await supabase.rpc('cast_vote', {
+    const { error: err } = await supabase.rpc('cast_vote', {
       p_room_id: room.id,
       p_voter_user_id: userId,
       p_target_player_id: selectedTarget,
     });
-    setMyVote(selectedTarget);
+    if (err) {
+      setError(err.message);
+    } else {
+      setMyVote(selectedTarget);
+      await refreshRoomState(room.id);
+    }
     setActionLoading(false);
   };
 
@@ -264,7 +285,7 @@ export default function RoomPage() {
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-56 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans selection:bg-emerald-500">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-56 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
       
       {/* 1. Верхний баннер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
@@ -391,7 +412,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 5. Панели управления Фазами */}
+      {/* 5. Управление фазами */}
       {room?.phase === 'SPEECH' && (
         <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
           {isMyTurn ? (
