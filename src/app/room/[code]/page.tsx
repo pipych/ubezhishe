@@ -24,7 +24,8 @@ import {
   LayoutGrid,
   Building,
   Utensils,
-  Clock
+  Clock,
+  Vote
 } from 'lucide-react';
 
 const CARD_CATEGORIES = [
@@ -53,7 +54,6 @@ export default function RoomPage() {
   const [myVote, setMyVote] = useState<string | null>(null);
   const [activeDeckCard, setActiveDeckCard] = useState<string | null>(null);
 
-  // Состояние вкладок и свернутой колоды
   const [activeTab, setActiveTab] = useState<'table' | 'bunker'>('table');
   const [isDeckCollapsed, setIsDeckCollapsed] = useState<boolean>(false);
 
@@ -65,6 +65,9 @@ export default function RoomPage() {
     color: string;
   } | null>(null);
 
+  // Оверлей итогов голосования (5 секунд)
+  const [voteResultsOverlay, setVoteResultsOverlay] = useState<{ name: string; votes: number; isKicked: boolean }[] | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
@@ -72,6 +75,7 @@ export default function RoomPage() {
   const selectedPlayerIdRef = useRef<string | null>(null);
   selectedPlayerIdRef.current = selectedPlayerId;
 
+  const prevPhaseRef = useRef<string | null>(null);
   const channelRef = useRef<any>(null);
   const overlayTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -97,6 +101,7 @@ export default function RoomPage() {
 
         if (roomErr || !roomData) throw new Error('Комната не найдена');
         setRoom(roomData);
+        prevPhaseRef.current = roomData.phase;
 
         await fetchPlayers(roomData.id);
       } catch (err: any) {
@@ -117,6 +122,31 @@ export default function RoomPage() {
     }, 5000);
   };
 
+  const showVoteResults = async (roomId: string) => {
+    const { data: allVotes } = await supabase.from('votes').select('target_id').eq('room_id', roomId);
+    const { data: allPlayers } = await supabase.from('players').select('id, name, is_kicked').eq('room_id', roomId);
+
+    if (allPlayers) {
+      const counts: { [key: string]: number } = {};
+      allVotes?.forEach((v) => {
+        counts[v.target_id] = (counts[v.target_id] || 0) + 1;
+      });
+
+      const summary = allPlayers
+        .map((p) => ({
+          name: p.name,
+          votes: counts[p.id] || 0,
+          isKicked: p.is_kicked,
+        }))
+        .sort((a, b) => b.votes - a.votes);
+
+      setVoteResultsOverlay(summary);
+      setTimeout(() => {
+        setVoteResultsOverlay(null);
+      }, 5000);
+    }
+  };
+
   useEffect(() => {
     if (!room?.id || !userId) return;
 
@@ -132,7 +162,14 @@ export default function RoomPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` },
-        () => refreshRoomState(room.id)
+        (payload: any) => {
+          const newRoom = payload.new;
+          if (prevPhaseRef.current === 'VOTING' && newRoom.phase !== 'VOTING') {
+            showVoteResults(room.id);
+          }
+          prevPhaseRef.current = newRoom.phase;
+          setRoom(newRoom);
+        }
       )
       .on(
         'postgres_changes',
@@ -193,7 +230,13 @@ export default function RoomPage() {
 
   const refreshRoomState = async (roomId: string) => {
     const { data: freshRoom } = await supabase.from('rooms').select('*').eq('id', roomId).single();
-    if (freshRoom) setRoom(freshRoom);
+    if (freshRoom) {
+      if (prevPhaseRef.current === 'VOTING' && freshRoom.phase !== 'VOTING') {
+        showVoteResults(roomId);
+      }
+      prevPhaseRef.current = freshRoom.phase;
+      setRoom(freshRoom);
+    }
   };
 
   const fetchPlayers = async (roomId: string) => {
@@ -560,53 +603,102 @@ export default function RoomPage() {
               )}
             </div>
           )}
-
-          {/* Голосование */}
-          {room?.phase === 'VOTING' && !me?.is_kicked && (
-            <div className="bg-zinc-900/80 border border-rose-900/50 rounded-2xl p-5 space-y-3 shadow-xl">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Голосование за изгнание</h3>
-                <span className="font-mono text-xs text-rose-300 font-bold">{timeLeft}с</span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {activePlayers
-                  .filter((p) => p.user_id !== userId)
-                  .map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedTarget(p.id)}
-                      className={`p-3 rounded-xl border text-xs font-semibold text-left transition ${
-                        selectedTarget === p.id
-                          ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-md'
-                          : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-300'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-              </div>
-
-              <button
-                onClick={handleCastVote}
-                disabled={!selectedTarget || actionLoading}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-zinc-950 font-bold text-xs py-2.5 rounded-full transition active:scale-95 disabled:opacity-40"
-              >
-                {myVote ? 'Голос зафиксирован (изменить)' : 'Подтвердить голос'}
-              </button>
-            </div>
-          )}
         </>
       )}
 
-      {/* 4. ФИКСИРОВАННЫЙ НИЖНИЙ БЛОК: СВОРАЧИВАЕМАЯ КОЛОДА + ПАНЕЛЬ ВКЛАДОК ПОВЕРХ ВСЕГО */}
+      {/* 4. ОВЕРЛЕЙ ГОЛОСОВАНИЯ (ПОВЕРХ ВСЕГО) */}
+      {room?.phase === 'VOTING' && !me?.is_kicked && (
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[110] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border-2 border-rose-900/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl text-center relative">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2 text-rose-400 font-extrabold uppercase text-xs tracking-wider">
+                <Vote className="w-5 h-5" />
+                <span>Голосование за изгнание</span>
+              </div>
+              <span className="font-mono text-xs bg-rose-950 text-rose-300 font-bold px-3 py-1 rounded-full border border-rose-800/50">
+                {timeLeft}с
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400 text-left">
+              Выберите игрока, которого хотите выгнать из бункера:
+            </p>
+
+            <div className="grid grid-cols-2 gap-2.5 max-h-60 overflow-y-auto">
+              {activePlayers
+                .filter((p) => p.user_id !== userId)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedTarget(p.id)}
+                    className={`p-3.5 rounded-2xl border text-xs font-bold text-left transition ${
+                      selectedTarget === p.id
+                        ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-lg shadow-rose-950/50 scale-102'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+            </div>
+
+            <button
+              onClick={handleCastVote}
+              disabled={!selectedTarget || actionLoading}
+              className="w-full bg-rose-600 hover:bg-rose-500 text-zinc-950 font-black text-xs py-3 rounded-2xl transition active:scale-95 disabled:opacity-40 shadow-lg shadow-rose-950/40 uppercase tracking-wider"
+            >
+              {myVote ? 'Голос зафиксирован (Изменить)' : 'Подтвердить голос'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 5. ОВЕРЛЕЙ ИТОГОВ ГОЛОСОВАНИЯ (5 СЕКУНД) */}
+      {voteResultsOverlay && (
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-xl z-[125] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center space-y-5">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-full border border-amber-800">
+                Результаты голосования
+              </span>
+              <h3 className="text-lg font-black text-zinc-100 pt-2">Распределение голосов</h3>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {voteResultsOverlay.map((res, idx) => (
+                <div
+                  key={idx}
+                  className={`flex items-center justify-between p-3 rounded-2xl border ${
+                    res.isKicked
+                      ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-200'
+                  }`}
+                >
+                  <span className="text-xs font-bold flex items-center gap-2">
+                    {res.name}
+                    {res.isKicked && <span className="text-[9px] bg-rose-600 text-zinc-950 px-2 py-0.5 rounded-full font-black">ИЗГНАН</span>}
+                  </span>
+                  <span className="font-mono text-xs font-black bg-zinc-900 px-3 py-1 rounded-xl border border-zinc-800">
+                    {res.votes} {res.votes === 1 ? 'голос' : res.votes > 1 && res.votes < 5 ? 'голоса' : 'голосов'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-amber-500 h-full w-full transition-all duration-[5000ms] ease-linear w-0" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. ФИКСИРОВАННЫЙ НИЖНИЙ БЛОК: СВОРАЧИВАЕМАЯ КОЛОДА + ПАНЕЛЬ ВКЛАДОК */}
       <div className="fixed bottom-0 left-0 right-0 z-[80] pointer-events-none flex flex-col items-center">
         
-        {/* А) ЛИЧНАЯ КОЛОДА КАРТ (ПОКАЗЫВАЕТСЯ ТОЛЬКО ВО ВРЕМЯ ИГРЫ) */}
+        {/* А) ЛИЧНАЯ КОЛОДА КАРТ */}
         {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
           <div className="w-full max-w-4xl px-4 pointer-events-auto transition-all duration-300">
             
-            {/* Кнопка скрыть / показать колоду со стрелочкой */}
             <div className="flex justify-center mb-1">
               <button
                 onClick={() => setIsDeckCollapsed(!isDeckCollapsed)}
@@ -619,7 +711,6 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* Раскрывающийся веер карт */}
             {!isDeckCollapsed && (
               <div className="bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent pt-2 pb-1 transition-all">
                 <div className="flex justify-center items-end -space-x-8 sm:-space-x-12 min-h-[210px]">
@@ -683,11 +774,10 @@ export default function RoomPage() {
           </div>
         )}
 
-        {/* Б) ПАНЕЛЬ ВКЛАДОК СТОЛ И БУНКЕР С КНОПКОЙ СКИПА МЕЖДУ НИМИ */}
+        {/* Б) ПАНЕЛЬ ВКЛАДОК СТОЛ И БУНКЕР С КНОПКОЙ СКИПА */}
         <div className="w-full bg-zinc-950/95 border-t border-zinc-800/90 backdrop-blur-2xl px-6 py-3 pointer-events-auto">
           <div className="max-w-md mx-auto flex items-center justify-between gap-4">
             
-            {/* Вкладка: Стол */}
             <button
               onClick={() => setActiveTab('table')}
               className={`flex-1 py-2.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 border ${
@@ -700,7 +790,6 @@ export default function RoomPage() {
               <span>Стол</span>
             </button>
 
-            {/* Круглая кнопка Скипа Обсуждения (между Столом и Бункером) */}
             {room?.phase === 'DISCUSSION' && (
               <button
                 onClick={handleSkipDiscussion}
@@ -716,7 +805,6 @@ export default function RoomPage() {
               </button>
             )}
 
-            {/* Вкладка: Бункер */}
             <button
               onClick={() => setActiveTab('bunker')}
               className={`flex-1 py-2.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 border ${
@@ -734,7 +822,7 @@ export default function RoomPage() {
 
       </div>
 
-      {/* 5. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
+      {/* 7. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
       {cardRevealOverlay && (
         <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-[120] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border-2 border-emerald-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center relative overflow-hidden space-y-4">
@@ -764,7 +852,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
+      {/* 8. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
       {room?.phase === 'ENDED' && (
         <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl">
