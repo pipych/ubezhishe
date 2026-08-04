@@ -147,7 +147,6 @@ export default function RoomPage() {
     }
   };
 
-  // Отправка голоса
   const handleCastVote = async () => {
     if (!selectedTarget || !room) return;
     setActionLoading(true);
@@ -167,7 +166,6 @@ export default function RoomPage() {
     setActionLoading(false);
   };
 
-  // Подсчет голосов и исключение (Хост)
   const handleTallyAndKick = async () => {
     if (!room) return;
     setActionLoading(true);
@@ -210,7 +208,7 @@ export default function RoomPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6 max-w-4xl mx-auto flex flex-col gap-6">
       
-      {/* Шапка комнаты */}
+      {/* 1. Шапка комнаты */}
       <div className="bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-xl rounded-3xl p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -235,7 +233,54 @@ export default function RoomPage() {
         )}
       </div>
 
-      {/* Уведомление для изгнанного игрока */}
+      {/* 2. Условия Бункера и Катастрофа */}
+      {room?.phase !== 'LOBBY' && (
+        <div className="bg-zinc-900/60 border border-amber-900/30 backdrop-blur-xl rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <h2 className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              Условия Убежища и Катастрофа
+            </h2>
+            <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full font-medium">
+              Общая информация
+            </span>
+          </div>
+
+          <div className="bg-amber-950/20 border border-amber-900/40 rounded-2xl p-4">
+            <p className="text-[10px] text-amber-500/80 uppercase font-bold tracking-wider mb-1">
+              Причина катастрофы
+            </p>
+            <p className="text-sm font-bold text-amber-100 leading-snug">
+              {room?.bunker_info?.catastrophe || 'Ядерный удар с последующей радиоактивной зимой. Поверхность заражена.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="bg-zinc-800/40 border border-zinc-700/40 rounded-2xl p-3">
+              <p className="text-[10px] text-zinc-400 uppercase font-medium">Вместимость / Площадь</p>
+              <p className="text-xs font-semibold text-zinc-100 mt-0.5">
+                {room?.bunker_info?.size || '150 кв. м (мест: 5)'}
+              </p>
+            </div>
+
+            <div className="bg-zinc-800/40 border border-zinc-700/40 rounded-2xl p-3">
+              <p className="text-[10px] text-zinc-400 uppercase font-medium">Запасы ресурсов</p>
+              <p className="text-xs font-semibold text-zinc-100 mt-0.5">
+                {room?.bunker_info?.food || 'Еда и фильтры на 1.5 года'}
+              </p>
+            </div>
+
+            <div className="bg-zinc-800/40 border border-zinc-700/40 rounded-2xl p-3">
+              <p className="text-[10px] text-zinc-400 uppercase font-medium">Время в изоляции</p>
+              <p className="text-xs font-semibold text-zinc-100 mt-0.5">
+                {room?.bunker_info?.duration || '12 месяцев'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Уведомление для изгнанного игрока */}
       {me?.is_kicked && (
         <div className="bg-rose-950/40 border border-rose-900/60 rounded-3xl p-4 text-center">
           <p className="text-xs text-rose-300 font-semibold uppercase tracking-wider">
@@ -247,7 +292,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* Список игроков в Лобби */}
+      {/* 4. Список игроков в Лобби */}
       {room?.phase === 'LOBBY' && (
         <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-3xl p-5 space-y-4">
           <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider px-1">
@@ -271,7 +316,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* Блок голосования */}
+      {/* 5. Блок голосования */}
       {room?.phase === 'VOTING' && !me?.is_kicked && (
         <div className="bg-zinc-900/60 border border-rose-900/40 backdrop-blur-xl rounded-3xl p-5 sm:p-6 space-y-4">
           <div className="flex items-center justify-between">
@@ -328,7 +373,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* Личная карточка характеристик */}
+      {/* 6. Личная карточка характеристик */}
       {room?.phase !== 'LOBBY' && myCard && (
         <div className="bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-xl rounded-3xl p-5 sm:p-6 space-y-4">
           <h2 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">
