@@ -45,20 +45,28 @@ const CARD_CATEGORIES = [
 ];
 
 const translateCatastrophe = (title: string) => {
-  if (!title) return 'post-apocalyptic world catastrophe';
+  if (!title) return 'post apocalyptic world disaster';
+  
   const map: Record<string, string> = {
-    'Падение астероида': 'Asteroid impact post apocalyptic frozen earth',
-    'Ядерная война': 'Nuclear apocalypse ruined destruction city',
-    'Зомби-апокалипсис': 'Zombie apocalypse ruined apocalyptic city',
-    'Зомби-вирус': 'Lethal zombie virus pandemic apocalypse',
-    'Глобальное потепление': 'Global warming climate desert disaster',
-    'Всемирный потоп': 'World flood underwater sunken city apocalypse',
-    'Эпидемия': 'Global lethal epidemic biohazard apocalypse',
-    'Восстание ИИ': 'Cybernetic AI rebellion apocalypse robot war',
-    'Вторжение пришельцев': 'Alien invasion destruction apocalypse',
-    'Вулканическая зима': 'Volcanic winter ash dark sky apocalypse',
+    'Ядерный удар': 'nuclear explosion apocalypse ruined city',
+    'Ядерная война': 'nuclear apocalypse ruined destruction city',
+    'Падение астероида': 'asteroid impact apocalyptic frozen earth',
+    'Зомби-апокалипсис': 'zombie apocalypse ruined city',
+    'Зомби-вирус': 'lethal zombie virus pandemic apocalypse',
+    'Глобальное потепление': 'global warming climate desert disaster',
+    'Всемирный потоп': 'world flood underwater sunken city',
+    'Эпидемия': 'global lethal epidemic biohazard apocalypse',
+    'Восстание ИИ': 'cybernetic AI rebellion robot war apocalypse',
+    'Вторжение пришельцев': 'alien invasion destruction apocalypse',
+    'Вулканическая зима': 'volcanic winter ash dark sky apocalypse',
+    'Техногенная катастрофа': 'man-made industrial disaster apocalypse',
+    'Засуха': 'extreme drought desert wasteland apocalypse',
+    'Солнечная вспышка': 'solar flare cosmic radiation wasteland',
   };
-  return map[title] || `${title} post apocalyptic catastrophe`;
+
+  if (map[title]) return map[title];
+
+  return 'post apocalyptic disaster dark atmospheric ruin';
 };
 
 const getCatastropheImageUrl = (catastropheTitle: string, roomSeed: string) => {
