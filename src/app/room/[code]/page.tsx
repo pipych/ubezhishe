@@ -112,7 +112,7 @@ export default function RoomPage() {
         await fetchPlayers(roomData.id);
       } catch (err: any) {
         setError(err.message || 'Ошибка загрузки комнаты');
-      } font-mono finally {
+      } finally {
         setLoading(false);
       }
     };
