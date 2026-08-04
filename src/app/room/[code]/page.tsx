@@ -65,7 +65,6 @@ export default function RoomPage() {
     color: string;
   } | null>(null);
 
-  // Оверлей итогов голосования (5 секунд)
   const [voteResultsOverlay, setVoteResultsOverlay] = useState<{ name: string; votes: number; isKicked: boolean }[] | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -699,15 +698,15 @@ export default function RoomPage() {
         {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
           <div className="w-full max-w-4xl px-4 pointer-events-auto transition-all duration-300">
             
+            {/* Иконка-стрелочка для скрытия/открытия колоды */}
             <div className="flex justify-center mb-1">
               <button
                 onClick={() => setIsDeckCollapsed(!isDeckCollapsed)}
-                className={`bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:text-white px-4 py-1 rounded-t-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md shadow-lg transition-transform ${
-                  isDeckCollapsed ? 'animate-bounce border-amber-500/50 text-amber-400' : ''
+                className={`p-1.5 text-zinc-400 hover:text-white transition-all ${
+                  isDeckCollapsed ? 'animate-bounce text-amber-400' : ''
                 }`}
               >
-                <span>{isDeckCollapsed ? 'Открыть колоду' : 'Скрыть'}</span>
-                {isDeckCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {isDeckCollapsed ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
               </button>
             </div>
 
