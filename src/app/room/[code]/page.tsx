@@ -326,9 +326,14 @@ export default function RoomPage() {
   const handleReadyStart = async () => {
     if (!room) return;
     setActionLoading(true);
-    const { error: err } = await supabase.rpc('player_ready_start', { p_room_id: room.id, p_user_id: userId });
-    if (err) setError(err.message);
-    else await refreshRoomState(room.id);
+    setError('');
+    try {
+      const { error: rpcErr } = await supabase.rpc('player_ready_start', { p_room_id: room.id, p_user_id: userId });
+      if (rpcErr) setError('RPC: ' + rpcErr.message);
+      else await refreshRoomState(room.id);
+    } catch (e: any) {
+      setError('JS: ' + (e.message || String(e)));
+    }
     setActionLoading(false);
   };
 
