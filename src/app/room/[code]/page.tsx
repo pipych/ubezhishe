@@ -876,7 +876,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. ОВЕРЛЕЙ ГОЛОСОВАНИЯ */}
+      {/* 6. ОВЕРЛЕЙ ГОЛОСОВАНИЯ (20 СЕКУНД) */}
       {room?.phase === 'VOTING' && !me?.is_kicked && (
         <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[110] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border-2 border-rose-900/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl text-center relative">
@@ -895,21 +895,26 @@ export default function RoomPage() {
             </p>
 
             <div className="grid grid-cols-2 gap-2.5 max-h-60 overflow-y-auto">
-              {activePlayers
-                .filter((p) => p.user_id !== userId)
-                .map((p) => (
+              {activePlayers.map((p) => {
+                const isMe = p.user_id === userId;
+                return (
                   <button
                     key={p.id}
+                    disabled={isMe || actionLoading}
                     onClick={() => setSelectedTarget(p.id)}
-                    className={`p-3.5 rounded-2xl border text-xs font-bold text-left transition ${
-                      selectedTarget === p.id
+                    className={`p-3.5 rounded-2xl border text-xs font-bold text-left transition flex items-center justify-between ${
+                      isMe
+                        ? 'bg-zinc-950/40 border-zinc-800/50 text-zinc-600 opacity-50 cursor-not-allowed'
+                        : selectedTarget === p.id
                         ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-lg shadow-rose-950/50 scale-102'
                         : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
-                    {p.name}
+                    <span>{p.name}</span>
+                    {isMe && <span className="text-[10px] text-zinc-500 font-normal">(Вы)</span>}
                   </button>
-                ))}
+                );
+              })}
             </div>
 
             <button
@@ -923,10 +928,10 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 7. ОВЕРЛЕЙ ИТОГОВ ГОЛОСОВАНИЯ (5 СЕКУНД) */}
+      {/* 7. ОВЕРЛЕЙ ИТОГОВ ГОЛОСОВАНИЯ В ВИДЕ СЕТКИ ПЛАШЕК С КВАДРАТИКАМИ (5 СЕКУНД) */}
       {voteResultsOverlay && (
-        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-xl z-[125] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center space-y-5">
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[125] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center relative">
             <div className="space-y-1">
               <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-full border border-amber-800">
                 Результаты голосования
@@ -934,23 +939,25 @@ export default function RoomPage() {
               <h3 className="text-lg font-black text-zinc-100 pt-2">Распределение голосов</h3>
             </div>
 
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2.5 max-h-60 overflow-y-auto">
               {voteResultsOverlay.map((res: any, idx: number) => (
                 <div
                   key={idx}
-                  className={`flex items-center justify-between p-3 rounded-2xl border ${
+                  className={`p-3.5 rounded-2xl border text-xs font-bold text-left flex items-center justify-between transition ${
                     res.isKicked
-                      ? 'bg-rose-950/40 border-rose-800/80 text-rose-200'
-                      : 'bg-zinc-950 border-zinc-800 text-zinc-200'
+                      ? 'bg-rose-950/40 border-rose-800 text-rose-200'
+                      : 'bg-zinc-950 border-zinc-800 text-zinc-300'
                   }`}
                 >
-                  <span className="text-xs font-bold flex items-center gap-2">
-                    {res.name}
-                    {res.isKicked && <span className="text-[9px] bg-rose-600 text-zinc-950 px-2 py-0.5 rounded-full font-black">ИЗГНАН</span>}
-                  </span>
-                  <span className="font-mono text-xs font-black bg-zinc-900 px-3 py-1 rounded-xl border border-zinc-800">
-                    {res.votes} {res.votes === 1 ? 'голос' : res.votes > 1 && res.votes < 5 ? 'голоса' : 'голосов'}
-                  </span>
+                  <div className="flex flex-col gap-0.5 truncate pr-2">
+                    <span className="truncate">{res.name}</span>
+                    {res.isKicked && (
+                      <span className="text-[9px] text-rose-400 font-black">ИЗГНАН</span>
+                    )}
+                  </div>
+                  <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-700 flex items-center justify-center font-mono text-xs font-black text-amber-400 shrink-0 shadow-inner">
+                    {res.votes}
+                  </div>
                 </div>
               ))}
             </div>
