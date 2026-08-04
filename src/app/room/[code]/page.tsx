@@ -16,7 +16,15 @@ import {
   ShieldCheck,
   PartyPopper,
   Mic,
-  X
+  X,
+  ChevronUp,
+  ChevronDown,
+  SkipForward,
+  Shield,
+  LayoutGrid,
+  Building,
+  Utensils,
+  Clock
 } from 'lucide-react';
 
 const CARD_CATEGORIES = [
@@ -44,6 +52,10 @@ export default function RoomPage() {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [myVote, setMyVote] = useState<string | null>(null);
   const [activeDeckCard, setActiveDeckCard] = useState<string | null>(null);
+
+  // Состояние вкладок и свернутой колоды
+  const [activeTab, setActiveTab] = useState<'table' | 'bunker'>('table');
+  const [isDeckCollapsed, setIsDeckCollapsed] = useState<boolean>(false);
 
   const [cardRevealOverlay, setCardRevealOverlay] = useState<{
     playerName: string;
@@ -339,6 +351,7 @@ export default function RoomPage() {
   const selectedPlayer = players.find((p) => p.id === selectedPlayerId);
   const isMyTurn = room?.phase === 'SPEECH' && room?.current_speaker_id === me?.id;
   const survivorsGoal = Math.ceil((room?.total_initial_players || players.length) / 2);
+  const hasSkippedDiscussion = room?.skip_votes?.includes(userId);
 
   const formatTimer = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -351,7 +364,7 @@ export default function RoomPage() {
     : Zap;
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-72 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-80 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
       
       {/* 1. Верхний баннер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
@@ -397,259 +410,334 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 2. Условия Бункера */}
-      {room?.phase !== 'LOBBY' && (
-        <div className="bg-zinc-900/40 border border-amber-900/30 rounded-2xl p-4 space-y-2">
-          <div className="flex items-center gap-2 text-amber-500 text-xs font-bold uppercase tracking-wider">
-            <AlertTriangle className="w-4 h-4" />
-            <span>Условия катастрофы</span>
-          </div>
-          <p className="text-xs text-amber-100/90 font-medium">{room?.bunker_info?.catastrophe}</p>
-          <div className="flex flex-wrap gap-4 text-[11px] text-zinc-400 pt-1">
-            <span>🏢 {room?.bunker_info?.size}</span>
-            <span>🥫 {room?.bunker_info?.food}</span>
-            <span>⏳ {room?.bunker_info?.duration}</span>
-          </div>
-        </div>
-      )}
-
-      {/* 3. НАВИГАЦИОННЫЙ БАР ИГРОКОВ */}
-      <div className="space-y-2">
-        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider px-1">Список игроков:</p>
-        <div className="flex items-center gap-2.5 overflow-x-auto py-2 px-1 scrollbar-thin scrollbar-thumb-zinc-800">
-          {players.map((p) => {
-            const isSpeaking = room?.current_speaker_id === p.id;
-            const isSelected = selectedPlayerId === p.id;
-            return (
-              <button
-                key={p.id}
-                onClick={() => setSelectedPlayerId(p.id)}
-                className={`min-w-max px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
-                  isSelected
-                    ? 'bg-emerald-500 text-zinc-950 border-emerald-300 shadow-lg shadow-emerald-950/50 scale-105'
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                } ${p.is_kicked ? 'opacity-40 line-through bg-rose-950/30 border-rose-900/40 text-rose-300' : ''}`}
-              >
-                <span>{p.name}</span>
-                {isSpeaking && (
-                  <span className="bg-amber-400 text-zinc-950 text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1">
-                    <Mic className="w-2.5 h-2.5" /> СПИКЕР
-                  </span>
-                )}
-                {p.is_kicked && <span className="text-[9px] text-rose-400 font-extrabold">ИЗГНАН</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. РЯД КАРТ ВЫБРАННОГО ИГРОКА */}
-      {selectedPlayer && inspectedCards && (
-        <div className="bg-zinc-900/70 border border-zinc-800/80 backdrop-blur-xl rounded-3xl p-5 space-y-4 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+      {/* 2. ВКЛАДКА "БУНКЕР" */}
+      {activeTab === 'bunker' && (
+        <div className="bg-zinc-900/90 border border-amber-900/40 rounded-3xl p-6 space-y-6 shadow-2xl backdrop-blur-xl animate-fadeIn">
+          <div className="flex items-center gap-2.5 text-amber-500 border-b border-zinc-800 pb-4">
+            <Shield className="w-6 h-6" />
             <div>
-              <h2 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                Игрок: <span className="text-emerald-400">{selectedPlayer.name}</span>
-              </h2>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">Информация о Бункере</h2>
+              <p className="text-[11px] text-zinc-400">Все параметры выживания и характеристика убежища</p>
             </div>
-            {room?.current_speaker_id === selectedPlayer.id && (
-              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-3 py-1 rounded-full animate-pulse font-semibold flex items-center gap-1.5">
-                <Mic className="w-3.5 h-3.5" /> Выступает
-              </span>
-            )}
           </div>
 
-          <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin scrollbar-thumb-zinc-800">
-            {CARD_CATEGORIES.map((cat) => {
-              const IconComponent = cat.icon;
-              const val = inspectedCards[cat.key];
-              const isRevealed = inspectedCards[`${cat.key}_revealed`];
-              return (
-                <div
-                  key={cat.key}
-                  className={`w-36 sm:w-44 h-56 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shrink-0 shadow-xl relative overflow-hidden`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <IconComponent className={`w-4 h-4 shrink-0 ${cat.color}`} />
-                    <span className={`text-[10px] font-black uppercase tracking-wider ${cat.color}`}>{cat.label}</span>
-                  </div>
-
-                  <div className="my-auto text-center px-1">
-                    {isRevealed ? (
-                      <p className="text-xs font-bold text-zinc-100 leading-snug">
-                        {val}
-                      </p>
-                    ) : (
-                      <HelpCircle className="w-8 h-8 text-zinc-700 mx-auto" />
-                    )}
-                  </div>
-
-                  <div className="text-center">
-                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                      isRevealed ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : 'bg-zinc-800 text-zinc-500'
-                    }`}>
-                      {isRevealed ? 'Открыта' : 'Закрыта'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 5. Управление фазами */}
-      {room?.phase === 'SPEECH' && (
-        <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
-          {isMyTurn ? (
-            <p className="text-xs text-emerald-400 font-bold animate-pulse uppercase tracking-wider">
-              Ваша очередь выступать! Выберите карту из своей колоды и нажмите «Раскрыть».
-            </p>
-          ) : (
-            <p className="text-xs text-zinc-400">
-              Сейчас очередь игрока <span className="text-zinc-200 font-bold">{players.find((p) => p.id === room.current_speaker_id)?.name}</span>.
-            </p>
-          )}
-        </div>
-      )}
-
-      {room?.phase === 'DISCUSSION' && (
-        <div className="bg-zinc-900/60 border border-amber-900/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Общее обсуждение</h3>
-            <p className="text-[11px] text-zinc-400 mt-0.5">
-              Проголосовали за пропуск: {room?.skip_votes?.length || 0} из {activePlayers.length}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> Катастрофа
+            </h3>
+            <p className="text-xs sm:text-sm text-zinc-200 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-800/80 leading-relaxed font-medium">
+              {room?.bunker_info?.catastrophe || 'Данные не загружены'}
             </p>
           </div>
-          <button
-            onClick={handleSkipDiscussion}
-            disabled={actionLoading}
-            className="bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs px-5 py-2.5 rounded-full transition active:scale-95"
-          >
-            Пропустить обсуждение
-          </button>
-        </div>
-      )}
 
-      {room?.phase === 'VOTING' && !me?.is_kicked && (
-        <div className="bg-zinc-900/80 border border-rose-900/50 rounded-2xl p-5 space-y-3 shadow-xl">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Голосование за изгнание</h3>
-            <span className="font-mono text-xs text-rose-300 font-bold">{timeLeft}с</span>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {activePlayers
-              .filter((p) => p.user_id !== userId)
-              .map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedTarget(p.id)}
-                  className={`p-3 rounded-xl border text-xs font-semibold text-left transition ${
-                    selectedTarget === p.id
-                      ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-md'
-                      : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-300'
-                  }`}
-                >
-                  {p.name}
-                </button>
-              ))}
-          </div>
-
-          <button
-            onClick={handleCastVote}
-            disabled={!selectedTarget || actionLoading}
-            className="w-full bg-rose-600 hover:bg-rose-500 text-zinc-950 font-bold text-xs py-2.5 rounded-full transition active:scale-95 disabled:opacity-40"
-          >
-            {myVote ? 'Голос зафиксирован (изменить)' : 'Подтвердить голос'}
-          </button>
-        </div>
-      )}
-
-      {/* 6. ЛИЧНАЯ КОЛОДА КАРТ */}
-      {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none pb-2 pt-10 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent">
-          <div className="max-w-4xl mx-auto px-4 pointer-events-auto relative">
-            
-            <div className="flex items-center justify-center mb-2">
-              {isMyTurn ? (
-                <span className="bg-emerald-500 text-zinc-950 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-lg shadow-emerald-500/30 animate-bounce flex items-center gap-1">
-                  <Zap className="w-3 h-3 fill-zinc-950" /> Ваш ход! Раскройте одну карту
-                </span>
-              ) : (
-                <span className="bg-zinc-900/90 border border-zinc-800 text-zinc-400 text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md">
-                  Ваша колода
-                </span>
-              )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-zinc-950/60 border border-zinc-800 p-4 rounded-2xl flex items-center gap-3">
+              <Building className="w-5 h-5 text-sky-400 shrink-0" />
+              <div>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase">Площадь</p>
+                <p className="text-xs font-semibold text-zinc-200">{room?.bunker_info?.size || '—'}</p>
+              </div>
             </div>
 
-            <div className="flex justify-center items-end -space-x-8 sm:-space-x-12 min-h-[230px] pt-4 pb-2">
-              {CARD_CATEGORIES.map((cat, index) => {
-                const IconComponent = cat.icon;
-                const item = myCard[cat.key];
-                const isSelected = activeDeckCard === cat.key;
-                const canShowRevealButton = isSelected && isMyTurn && !item?.revealed;
+            <div className="bg-zinc-950/60 border border-zinc-800 p-4 rounded-2xl flex items-center gap-3">
+              <Utensils className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase">Запасы Еды</p>
+                <p className="text-xs font-semibold text-zinc-200">{room?.bunker_info?.food || '—'}</p>
+              </div>
+            </div>
 
+            <div className="bg-zinc-950/60 border border-zinc-800 p-4 rounded-2xl flex items-center gap-3">
+              <Clock className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase">Время нахождения</p>
+                <p className="text-xs font-semibold text-zinc-200">{room?.bunker_info?.duration || '—'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. ВКЛАДКА "СТОЛ" */}
+      {activeTab === 'table' && (
+        <>
+          {/* Список игроков */}
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider px-1">Список игроков:</p>
+            <div className="flex items-center gap-2.5 overflow-x-auto py-2 px-1 scrollbar-thin scrollbar-thumb-zinc-800">
+              {players.map((p) => {
+                const isSpeaking = room?.current_speaker_id === p.id;
+                const isSelected = selectedPlayerId === p.id;
                 return (
-                  <div
-                    key={cat.key}
-                    onClick={() => setActiveDeckCard(isSelected ? null : cat.key)}
-                    style={{
-                      transform: isSelected
-                        ? 'translateY(-48px) rotate(0deg) scale(1.12)'
-                        : `translateY(${cat.translateY}px) rotate(${cat.angle}deg)`,
-                      zIndex: isSelected ? 40 : index + 10,
-                    }}
-                    className={`group relative w-32 sm:w-36 h-48 sm:h-52 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shadow-2xl transition-all duration-300 ease-out cursor-pointer select-none ${
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedPlayerId(p.id)}
+                    className={`min-w-max px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
                       isSelected
-                        ? 'ring-4 ring-emerald-500/80 shadow-emerald-900/50'
-                        : 'hover:-translate-y-12 hover:rotate-0 hover:z-30 hover:scale-105'
-                    }`}
+                        ? 'bg-emerald-500 text-zinc-950 border-emerald-300 shadow-lg shadow-emerald-950/50 scale-105'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                    } ${p.is_kicked ? 'opacity-40 line-through bg-rose-950/30 border-rose-900/40 text-rose-300' : ''}`}
                   >
-                    <div className="flex items-center gap-1.5">
-                      <IconComponent className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${cat.color}`} />
-                      <span className={`text-[9px] font-black uppercase tracking-wider ${cat.color}`}>{cat.label}</span>
-                    </div>
-
-                    <div className="my-auto text-center px-1 z-10">
-                      <p className="text-xs font-bold text-zinc-100 leading-tight">
-                        {item?.val}
-                      </p>
-                    </div>
-
-                    <div className="z-10 mt-1">
-                      {item?.revealed ? (
-                        <div className="w-full bg-zinc-800/80 text-zinc-400 text-[9px] font-bold py-1 rounded-lg text-center border border-zinc-700/50 uppercase">
-                          Открыта
-                        </div>
-                      ) : canShowRevealButton ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRevealCard(cat.key);
-                          }}
-                          disabled={actionLoading}
-                          className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-[10px] font-black py-1.5 rounded-lg transition shadow-md active:scale-95"
-                        >
-                          Раскрыть
-                        </button>
-                      ) : null}
-                    </div>
-
-                  </div>
+                    <span>{p.name}</span>
+                    {isSpeaking && (
+                      <span className="bg-amber-400 text-zinc-950 text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1">
+                        <Mic className="w-2.5 h-2.5" /> СПИКЕР
+                      </span>
+                    )}
+                    {p.is_kicked && <span className="text-[9px] text-rose-400 font-extrabold">ИЗГНАН</span>}
+                  </button>
                 );
               })}
             </div>
+          </div>
+
+          {/* Карты выбранного игрока */}
+          {selectedPlayer && inspectedCards && (
+            <div className="bg-zinc-900/70 border border-zinc-800/80 backdrop-blur-xl rounded-3xl p-5 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+                <div>
+                  <h2 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                    Игрок: <span className="text-emerald-400">{selectedPlayer.name}</span>
+                  </h2>
+                </div>
+                {room?.current_speaker_id === selectedPlayer.id && (
+                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-3 py-1 rounded-full animate-pulse font-semibold flex items-center gap-1.5">
+                    <Mic className="w-3.5 h-3.5" /> Выступает
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin scrollbar-thumb-zinc-800">
+                {CARD_CATEGORIES.map((cat) => {
+                  const IconComponent = cat.icon;
+                  const val = inspectedCards[cat.key];
+                  const isRevealed = inspectedCards[`${cat.key}_revealed`];
+                  return (
+                    <div
+                      key={cat.key}
+                      className={`w-36 sm:w-44 h-56 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shrink-0 shadow-xl relative overflow-hidden`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <IconComponent className={`w-4 h-4 shrink-0 ${cat.color}`} />
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${cat.color}`}>{cat.label}</span>
+                      </div>
+
+                      <div className="my-auto text-center px-1">
+                        {isRevealed ? (
+                          <p className="text-xs font-bold text-zinc-100 leading-snug">
+                            {val}
+                          </p>
+                        ) : (
+                          <HelpCircle className="w-8 h-8 text-zinc-700 mx-auto" />
+                        )}
+                      </div>
+
+                      <div className="text-center">
+                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          isRevealed ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : 'bg-zinc-800 text-zinc-500'
+                        }`}>
+                          {isRevealed ? 'Открыта' : 'Закрыта'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Управление фазой Речи */}
+          {room?.phase === 'SPEECH' && (
+            <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
+              {isMyTurn ? (
+                <p className="text-xs text-emerald-400 font-bold animate-pulse uppercase tracking-wider">
+                  Ваша очередь выступать! Выберите карту из своей колоды и нажмите «Раскрыть».
+                </p>
+              ) : (
+                <p className="text-xs text-zinc-400">
+                  Сейчас очередь игрока <span className="text-zinc-200 font-bold">{players.find((p) => p.id === room.current_speaker_id)?.name}</span>.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Голосование */}
+          {room?.phase === 'VOTING' && !me?.is_kicked && (
+            <div className="bg-zinc-900/80 border border-rose-900/50 rounded-2xl p-5 space-y-3 shadow-xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Голосование за изгнание</h3>
+                <span className="font-mono text-xs text-rose-300 font-bold">{timeLeft}с</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {activePlayers
+                  .filter((p) => p.user_id !== userId)
+                  .map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedTarget(p.id)}
+                      className={`p-3 rounded-xl border text-xs font-semibold text-left transition ${
+                        selectedTarget === p.id
+                          ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-md'
+                          : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-300'
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+              </div>
+
+              <button
+                onClick={handleCastVote}
+                disabled={!selectedTarget || actionLoading}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-zinc-950 font-bold text-xs py-2.5 rounded-full transition active:scale-95 disabled:opacity-40"
+              >
+                {myVote ? 'Голос зафиксирован (изменить)' : 'Подтвердить голос'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 4. ФИКСИРОВАННЫЙ НИЖНИЙ БЛОК: СВОРАЧИВАЕМАЯ КОЛОДА + ПАНЕЛЬ ВКЛАДОК ПОВЕРХ ВСЕГО */}
+      <div className="fixed bottom-0 left-0 right-0 z-[80] pointer-events-none flex flex-col items-center">
+        
+        {/* А) ЛИЧНАЯ КОЛОДА КАРТ (ПОКАЗЫВАЕТСЯ ТОЛЬКО ВО ВРЕМЯ ИГРЫ) */}
+        {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
+          <div className="w-full max-w-4xl px-4 pointer-events-auto transition-all duration-300">
+            
+            {/* Кнопка скрыть / показать колоду со стрелочкой */}
+            <div className="flex justify-center mb-1">
+              <button
+                onClick={() => setIsDeckCollapsed(!isDeckCollapsed)}
+                className={`bg-zinc-900/90 border border-zinc-800 text-zinc-300 hover:text-white px-4 py-1 rounded-t-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md shadow-lg transition-transform ${
+                  isDeckCollapsed ? 'animate-bounce border-amber-500/50 text-amber-400' : ''
+                }`}
+              >
+                <span>{isDeckCollapsed ? 'Открыть колоду' : 'Скрыть'}</span>
+                {isDeckCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {/* Раскрывающийся веер карт */}
+            {!isDeckCollapsed && (
+              <div className="bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent pt-2 pb-1 transition-all">
+                <div className="flex justify-center items-end -space-x-8 sm:-space-x-12 min-h-[210px]">
+                  {CARD_CATEGORIES.map((cat, index) => {
+                    const IconComponent = cat.icon;
+                    const item = myCard[cat.key];
+                    const isSelected = activeDeckCard === cat.key;
+                    const canShowRevealButton = isSelected && isMyTurn && !item?.revealed;
+
+                    return (
+                      <div
+                        key={cat.key}
+                        onClick={() => setActiveDeckCard(isSelected ? null : cat.key)}
+                        style={{
+                          transform: isSelected
+                            ? 'translateY(-36px) rotate(0deg) scale(1.1)'
+                            : `translateY(${cat.translateY}px) rotate(${cat.angle}deg)`,
+                          zIndex: isSelected ? 40 : index + 10,
+                        }}
+                        className={`group relative w-32 sm:w-36 h-48 sm:h-52 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shadow-2xl transition-all duration-300 ease-out cursor-pointer select-none ${
+                          isSelected
+                            ? 'ring-4 ring-emerald-500/80 shadow-emerald-900/50'
+                            : 'hover:-translate-y-10 hover:rotate-0 hover:z-30 hover:scale-105'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <IconComponent className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${cat.color}`} />
+                          <span className={`text-[9px] font-black uppercase tracking-wider ${cat.color}`}>{cat.label}</span>
+                        </div>
+
+                        <div className="my-auto text-center px-1 z-10">
+                          <p className="text-xs font-bold text-zinc-100 leading-tight">
+                            {item?.val}
+                          </p>
+                        </div>
+
+                        <div className="z-10 mt-1">
+                          {item?.revealed ? (
+                            <div className="w-full bg-zinc-800/80 text-zinc-400 text-[9px] font-bold py-1 rounded-lg text-center border border-zinc-700/50 uppercase">
+                              Открыта
+                            </div>
+                          ) : canShowRevealButton ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRevealCard(cat.key);
+                              }}
+                              disabled={actionLoading}
+                              className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-[10px] font-black py-1.5 rounded-lg transition shadow-md active:scale-95"
+                            >
+                              Раскрыть
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Б) ПАНЕЛЬ ВКЛАДОК СТОЛ И БУНКЕР С КНОПКОЙ СКИПА МЕЖДУ НИМИ */}
+        <div className="w-full bg-zinc-950/95 border-t border-zinc-800/90 backdrop-blur-2xl px-6 py-3 pointer-events-auto">
+          <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+            
+            {/* Вкладка: Стол */}
+            <button
+              onClick={() => setActiveTab('table')}
+              className={`flex-1 py-2.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 border ${
+                activeTab === 'table'
+                  ? 'bg-zinc-800 border-zinc-700 text-emerald-400 shadow-lg'
+                  : 'bg-zinc-900/50 border-transparent text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span>Стол</span>
+            </button>
+
+            {/* Круглая кнопка Скипа Обсуждения (между Столом и Бункером) */}
+            {room?.phase === 'DISCUSSION' && (
+              <button
+                onClick={handleSkipDiscussion}
+                disabled={actionLoading || hasSkippedDiscussion}
+                title="Пропустить обсуждение"
+                className={`w-12 h-12 rounded-full shrink-0 flex items-center justify-center transition border shadow-xl ${
+                  hasSkippedDiscussion
+                    ? 'bg-amber-950/40 border-amber-800/50 text-amber-600 opacity-60'
+                    : 'bg-amber-500 hover:bg-amber-400 border-amber-300 text-zinc-950 animate-pulse active:scale-90'
+                }`}
+              >
+                <SkipForward className="w-5 h-5 fill-current" />
+              </button>
+            )}
+
+            {/* Вкладка: Бункер */}
+            <button
+              onClick={() => setActiveTab('bunker')}
+              className={`flex-1 py-2.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 border ${
+                activeTab === 'bunker'
+                  ? 'bg-zinc-800 border-zinc-700 text-amber-400 shadow-lg'
+                  : 'bg-zinc-900/50 border-transparent text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              <span>Бункер</span>
+            </button>
 
           </div>
         </div>
-      )}
 
-      {/* 7. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
+      </div>
+
+      {/* 5. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
       {cardRevealOverlay && (
         <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-[120] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border-2 border-emerald-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center relative overflow-hidden space-y-4">
-            
             <div className="space-y-1">
               <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-950 px-3 py-1 rounded-full border border-emerald-800">
                 Карта раскрыта!
@@ -672,12 +760,11 @@ export default function RoomPage() {
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
               <div className="bg-emerald-500 h-full w-full transition-all duration-[5000ms] ease-linear w-0" />
             </div>
-
           </div>
         </div>
       )}
 
-      {/* 8. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
+      {/* 6. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
       {room?.phase === 'ENDED' && (
         <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl">
