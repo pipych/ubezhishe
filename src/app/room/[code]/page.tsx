@@ -613,18 +613,39 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* Список раскрытых комнат бункера */}
+          {/* КАРТОЧКИ РАСКРЫТЫХ ПОМЕЩЕНИЙ БУНКЕРА */}
           <div className="space-y-3 pt-2">
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-              <Home className="w-4 h-4 text-sky-400" /> Раскрытые помещения бункера ({room?.bunker_info?.revealed_rooms?.length || 0})
+              <Home className="w-4 h-4 text-sky-400" /> Помещения бункера ({room?.bunker_info?.revealed_rooms?.length || 0})
             </h3>
             
-            <div className="grid grid-cols-1 gap-3">
+            <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin scrollbar-thumb-zinc-800">
               {room?.bunker_info?.revealed_rooms?.map((rm: any, idx: number) => (
-                <div key={idx} className="bg-zinc-950/70 border border-sky-900/40 p-4 rounded-2xl space-y-1">
-                  <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider">Комната #{idx + 1}</span>
-                  <h4 className="text-xs font-extrabold text-zinc-100">{rm.title}</h4>
-                  <p className="text-xs text-zinc-400 leading-snug">{rm.description}</p>
+                <div
+                  key={idx}
+                  className="w-36 sm:w-44 h-56 bg-zinc-900 border-2 border-sky-500/40 rounded-2xl p-3 flex flex-col justify-between shrink-0 shadow-xl relative overflow-hidden"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Home className="w-4 h-4 text-sky-400 shrink-0" />
+                    <span className="text-[10px] font-black uppercase tracking-wider text-sky-400">
+                      Комната #{idx + 1}
+                    </span>
+                  </div>
+
+                  <div className="my-auto text-center px-1 space-y-1">
+                    <p className="text-xs font-bold text-zinc-100 leading-snug">
+                      {rm.title}
+                    </p>
+                    <p className="text-[10px] text-zinc-400 leading-tight line-clamp-4">
+                      {rm.description}
+                    </p>
+                  </div>
+
+                  <div className="text-center">
+                    <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800/50">
+                      Раскрыта
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -812,23 +833,40 @@ export default function RoomPage() {
 
       {/* 5. ОВЕРЛЕЙ РАСКРЫТОЙ КОМНАТЫ БУНКЕРА (5 СЕКУНД) */}
       {roomRevealOverlay && (
-        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-xl z-[128] flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border-2 border-sky-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_0_50px_rgba(14,165,233,0.2)] text-center space-y-4">
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[128] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border-2 border-sky-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(14,165,233,0.2)] text-center space-y-5">
             <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 bg-sky-950 px-3 py-1 rounded-full border border-sky-800">
               Новое помещение бункера!
             </span>
 
-            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 space-y-2 text-left">
-              <h3 className="text-sm font-black text-sky-400 flex items-center gap-2">
-                <Home className="w-4 h-4" /> {roomRevealOverlay.title}
-              </h3>
-              <p className="text-xs text-zinc-200 leading-relaxed">
-                {roomRevealOverlay.description}
-              </p>
+            {/* Карточка помещения */}
+            <div className="w-full h-64 bg-zinc-950 border-2 border-sky-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-inner space-y-2">
+              <div className="flex items-center gap-1.5 justify-center">
+                <Home className="w-5 h-5 text-sky-400 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider text-sky-400">
+                  Помещение
+                </span>
+              </div>
+
+              <div className="my-auto text-center space-y-2 px-1">
+                <h3 className="text-base font-black text-zinc-100 leading-snug">
+                  {roomRevealOverlay.title}
+                </h3>
+                <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+                  {roomRevealOverlay.description}
+                </p>
+              </div>
+
+              <div className="text-center">
+                <span className="text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800/50">
+                  Бункер
+                </span>
+              </div>
             </div>
 
+            {/* Движущийся прогресс-бар без цифр */}
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-sky-500 h-full w-full transition-all duration-[5000ms] ease-linear w-0" />
+              <div className="bg-sky-500 h-full w-full animate-[shrink_5000ms_linear_forwards]" />
             </div>
           </div>
         </div>
@@ -914,7 +952,7 @@ export default function RoomPage() {
             </div>
 
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-amber-500 h-full w-full transition-all duration-[5000ms] ease-linear w-0" />
+              <div className="bg-amber-500 h-full w-full animate-[shrink_5000ms_linear_forwards]" />
             </div>
           </div>
         </div>
@@ -1073,7 +1111,7 @@ export default function RoomPage() {
             </div>
 
             <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-emerald-500 h-full w-full transition-all duration-[5000ms] ease-linear w-0" />
+              <div className="bg-emerald-500 h-full w-full animate-[shrink_5000ms_linear_forwards]" />
             </div>
           </div>
         </div>
