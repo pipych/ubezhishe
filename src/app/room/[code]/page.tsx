@@ -940,7 +940,7 @@ export default function RoomPage() {
 
             {!isDeckCollapsed && (
               <div className="bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent pt-2 pb-1 transition-all">
-                <div className="flex justify-center items-end -space-x-8 sm:-space-x-12 min-h-[210px]">
+                <div className="flex justify-center items-end -space-x-14 sm:-space-x-12 min-h-[210px]">
                   {CARD_CATEGORIES.map((cat, index) => {
                     const IconComponent = cat.icon;
                     const item = myCard[cat.key];
@@ -957,7 +957,7 @@ export default function RoomPage() {
                             : `translateY(${cat.translateY}px) rotate(${cat.angle}deg)`,
                           zIndex: isSelected ? 40 : index + 10,
                         }}
-                        className={`group relative w-32 sm:w-36 h-48 sm:h-52 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shadow-2xl transition-all duration-300 ease-out cursor-pointer select-none ${
+                        className={`group relative w-28 sm:w-36 h-48 sm:h-52 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shadow-2xl transition-all duration-300 ease-out cursor-pointer select-none ${
                           isSelected
                             ? 'ring-4 ring-emerald-500/80 shadow-emerald-900/50'
                             : 'hover:-translate-y-10 hover:rotate-0 hover:z-30 hover:scale-105'
