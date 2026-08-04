@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, getSupabase } from '@/lib/supabase';
 import {
   Briefcase,
   HeartPulse,
@@ -328,7 +328,8 @@ export default function RoomPage() {
     setActionLoading(true);
     setError('');
     try {
-      const { error: rpcErr } = await supabase.rpc('player_ready_start', { p_room_id: room.id, p_user_id: userId });
+      const client = getSupabase();
+      const { error: rpcErr } = await client.rpc('player_ready_start', { p_room_id: room.id, p_user_id: userId });
       if (rpcErr) setError('RPC: ' + rpcErr.message);
       else await refreshRoomState(room.id);
     } catch (e: any) {
