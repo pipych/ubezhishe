@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-// Категории карт и их стили
 const CARD_CATEGORIES = [
   { key: 'profession', label: 'Профессия', icon: '💼', border: 'border-sky-500/50', bg: 'from-sky-950/80 to-zinc-900', text: 'text-sky-300' },
   { key: 'health', label: 'Здоровье', icon: '🫀', border: 'border-emerald-500/50', bg: 'from-emerald-950/80 to-zinc-900', text: 'text-emerald-300' },
@@ -42,14 +41,12 @@ export default function RoomPage() {
     initRoom(id);
   }, [roomCode]);
 
-  // Синхронизация таймера
   useEffect(() => {
     if (!room?.phase_expires_at) return;
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((new Date(room.phase_expires_at).getTime() - Date.now()) / 1000));
       setTimeLeft(diff);
 
-      // Хост запрашивает переключение по истечении таймера
       if (diff === 0 && room.host_id === userId && room.phase !== 'LOBBY' && room.phase !== 'ENDED') {
         supabase.rpc('handle_phase_timeout', { p_room_id: room.id });
       }
@@ -57,21 +54,19 @@ export default function RoomPage() {
     return () => clearInterval(interval);
   }, [room?.phase_expires_at, room?.host_id, userId]);
 
-  // Автоматический фокус на текущем спикере при смене хода
   useEffect(() => {
     if (room?.current_speaker_id) {
       setSelectedPlayerId(room.current_speaker_id);
     }
   }, [room?.current_speaker_id]);
 
-  // Инициализация комнаты и подписок
   const initRoom = async (currentUserId: string) => {
     try {
       const { data: roomData, error: roomErr } = await supabase.from('rooms').select('*').eq('code', roomCode).single();
       if (roomErr || !roomData) throw new Error('Комната не найдена');
       setRoom(roomData);
 
-      fetchPlayers(roomData.id);
+      await fetchPlayers(roomData.id);
 
       const channel = supabase
         .channel(`room_${roomData.id}`)
@@ -84,8 +79,8 @@ export default function RoomPage() {
         .subscribe();
 
       if (roomData.phase !== 'LOBBY') {
-        fetchMyCard(roomData.id, currentUserId);
-        fetchVotes(roomData.id, currentUserId);
+        await fetchMyCard(roomData.id, currentUserId);
+        await fetchVotes(roomData.id, currentUserId);
       }
 
       return () => { supabase.removeChannel(channel); };
@@ -118,7 +113,6 @@ export default function RoomPage() {
     if (vote) setMyVote(vote.target_id);
   };
 
-  // Загрузка карт выбранного игрока (из public_player_cards)
   useEffect(() => {
     if (selectedPlayerId) fetchInspectedCards(selectedPlayerId);
   }, [selectedPlayerId]);
@@ -131,13 +125,20 @@ export default function RoomPage() {
   const handleStartGame = async () => {
     if (!room) return;
     setActionLoading(true);
-    await supabase.rpc('start_game', { p_room_id: room.id });
+    setError('');
+    const { error: rpcErr } = await supabase.rpc('start_game', { p_room_id: room.id });
+    if (rpcErr) {
+      setError(rpcErr.message);
+    } else {
+      await initRoom(userId);
+    }
     setActionLoading(false);
   };
 
   const handleRevealCard = async (fieldKey: string) => {
     if (!room) return;
     setActionLoading(true);
+    setError('');
     const { error: err } = await supabase.rpc('reveal_card_and_next_turn', {
       p_room_id: room.id,
       p_user_id: userId,
@@ -184,9 +185,9 @@ export default function RoomPage() {
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-48 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-4 font-sans selection:bg-emerald-500">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-56 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
       
-      {/* 1. Верхний информационный банер */}
+      {/* 1. Верхний банер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
         <div className="flex items-center gap-3">
           <span className="bg-emerald-950 text-emerald-400 font-mono text-xs font-bold px-3 py-1 rounded-full border border-emerald-800/50">
@@ -196,14 +197,13 @@ export default function RoomPage() {
             <h1 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
               Раунд {room?.round_number || 1} • <span className="text-emerald-400">{room?.phase}</span>
             </h1>
-            <p className="text-[11px] text-zinc-400">Выживших нужно: {survivorsGoal} из {room?.total_initial_players || players.length}</p>
+            <p className="text-[11px] text-zinc-400">Мест в бункере: {survivorsGoal} из {room?.total_initial_players || players.length}</p>
           </div>
         </div>
 
-        {/* Таймер */}
         {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && (
           <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-4 py-1.5 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
             <span className="font-mono text-sm font-bold text-emerald-400">{formatTimer(timeLeft)}</span>
           </div>
         )}
@@ -212,22 +212,22 @@ export default function RoomPage() {
           <button
             onClick={handleStartGame}
             disabled={actionLoading}
-            className="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs px-6 py-2 rounded-full transition shadow-lg shadow-emerald-950/40"
+            className="bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-bold text-xs px-6 py-2.5 rounded-full transition shadow-lg shadow-emerald-950/40 active:scale-95 disabled:opacity-50"
           >
-            Запустить игру ({players.length} чел.)
+            {actionLoading ? 'Запуск...' : `Запустить игру (${players.length} чел.)`}
           </button>
         )}
       </div>
 
-      {/* Ошибка */}
+      {/* Ошибки */}
       {error && (
-        <div className="bg-rose-950/60 border border-rose-800 text-rose-300 text-xs p-3 rounded-xl flex justify-between items-center">
+        <div className="bg-rose-950/80 border border-rose-800 text-rose-200 text-xs p-3.5 rounded-2xl flex justify-between items-center shadow-lg">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="font-bold ml-2">✕</button>
+          <button onClick={() => setError('')} className="font-bold ml-3 text-rose-400 hover:text-rose-100">✕</button>
         </div>
       )}
 
-      {/* 2. Условия Бункера */}
+      {/* 2. Описание Бункера */}
       {room?.phase !== 'LOBBY' && (
         <div className="bg-zinc-900/40 border border-amber-900/30 rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2 text-amber-500 text-xs font-bold uppercase tracking-wider">
@@ -242,10 +242,10 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 3. НАВИГАЦИОННЫЙ БАР ИГРОКОВ (Сверху) */}
-      <div className="space-y-1.5">
-        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider px-1">Выберите игрока для просмотра карт:</p>
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+      {/* 3. НАВИГАЦИОННЫЙ БАР ИГРОКОВ (Исправленная верстка плашек) */}
+      <div className="space-y-2">
+        <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider px-1">Список игроков (нажмите для просмотра):</p>
+        <div className="flex items-center gap-2.5 overflow-x-auto py-2 px-1 scrollbar-thin scrollbar-thumb-zinc-800">
           {players.map((p) => {
             const isSpeaking = room?.current_speaker_id === p.id;
             const isSelected = selectedPlayerId === p.id;
@@ -253,15 +253,15 @@ export default function RoomPage() {
               <button
                 key={p.id}
                 onClick={() => setSelectedPlayerId(p.id)}
-                className={`flex-shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border transition-all flex items-center gap-2 ${
+                className={`min-w-max px-4 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
                   isSelected
-                    ? 'bg-emerald-600 text-zinc-950 border-emerald-400 shadow-lg shadow-emerald-950/50 scale-105'
-                    : 'bg-zinc-900/80 border-zinc-800 text-zinc-300 hover:border-zinc-700'
-                } ${p.is_kicked ? 'opacity-40 line-through bg-rose-950/20 border-rose-900/40' : ''}`}
+                    ? 'bg-emerald-500 text-zinc-950 border-emerald-300 shadow-lg shadow-emerald-950/50 scale-105'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                } ${p.is_kicked ? 'opacity-40 line-through bg-rose-950/30 border-rose-900/40 text-rose-300' : ''}`}
               >
                 <span>{p.name}</span>
-                {isSpeaking && <span className="bg-amber-400 text-zinc-950 text-[9px] px-1.5 py-0.2 rounded-full font-bold">СПИКЕР</span>}
-                {p.is_kicked && <span className="text-[9px] text-rose-400 font-bold">ИЗГНАН</span>}
+                {isSpeaking && <span className="bg-amber-400 text-zinc-950 text-[9px] px-2 py-0.5 rounded-full font-black">СПИКЕР</span>}
+                {p.is_kicked && <span className="text-[9px] text-rose-400 font-extrabold">ИЗГНАН</span>}
               </button>
             );
           })}
@@ -277,7 +277,7 @@ export default function RoomPage() {
                 Игрок: <span className="text-emerald-400">{selectedPlayer.name}</span>
               </h2>
               <p className="text-[10px] text-zinc-400 mt-0.5">
-                {selectedPlayer.is_kicked ? 'Игрок изгнан — откройте все его карты' : 'Показываются открытые характеристики'}
+                {selectedPlayer.is_kicked ? 'Игрок изгнан — все его карты открыты' : 'Показываются только открытые характеристики'}
               </p>
             </div>
             {room?.current_speaker_id === selectedPlayer.id && (
@@ -294,13 +294,13 @@ export default function RoomPage() {
               return (
                 <div
                   key={cat.key}
-                  className={`bg-gradient-to-br ${cat.bg} border ${cat.border} rounded-2xl p-3 flex flex-col justify-between h-24 shadow-md`}
+                  className={`bg-gradient-to-br ${cat.bg} border ${cat.border} rounded-2xl p-3.5 flex flex-col justify-between min-h-[90px] shadow-md`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs">{cat.icon}</span>
+                    <span className="text-sm">{cat.icon}</span>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${cat.text}`}>{cat.label}</span>
                   </div>
-                  <p className="text-xs font-semibold text-zinc-100 leading-tight">
+                  <p className="text-xs font-semibold text-zinc-100 leading-tight mt-2">
                     {isRevealed ? val : '••••••••••••'}
                   </p>
                 </div>
@@ -310,43 +310,39 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 5. Панели управления Фазами */}
-
-      {/* Фаза SPEECH */}
+      {/* 5. Управление фазами */}
       {room?.phase === 'SPEECH' && (
         <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
           {isMyTurn ? (
             <p className="text-xs text-emerald-400 font-bold animate-pulse uppercase tracking-wider">
-              🗣️ Ваша очередь высказаться! Выберите карту внизу колоды и нажмите «Раскрыть».
+              🗣️ Ваша очередь выступать! Нажмите «Раскрыть» на одной из своих карт внизу.
             </p>
           ) : (
             <p className="text-xs text-zinc-400">
-              Выступает <span className="text-zinc-200 font-bold">{players.find((p) => p.id === room.current_speaker_id)?.name}</span>. Очередь перейдет сразу после открытия карты.
+              Сейчас очередь игрока <span className="text-zinc-200 font-bold">{players.find((p) => p.id === room.current_speaker_id)?.name}</span>.
             </p>
           )}
         </div>
       )}
 
-      {/* Фаза DISCUSSION */}
       {room?.phase === 'DISCUSSION' && (
         <div className="bg-zinc-900/60 border border-amber-900/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Фаза общего обсуждения (5 мин)</h3>
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Общее обсуждение (5 min)</h3>
             <p className="text-[11px] text-zinc-400 mt-0.5">
-              Проголосовало за пропуск: {room?.skip_votes?.length || 0} из {activePlayers.length}
+              Проголосовали за пропуск: {room?.skip_votes?.length || 0} из {activePlayers.length}
             </p>
           </div>
           <button
             onClick={handleSkipDiscussion}
             disabled={actionLoading}
-            className="bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs px-5 py-2 rounded-full transition active:scale-95"
+            className="bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs px-5 py-2.5 rounded-full transition active:scale-95"
           >
             Пропустить обсуждение
           </button>
         </div>
       )}
 
-      {/* Фаза VOTING (со 2 раунда) */}
       {room?.phase === 'VOTING' && !me?.is_kicked && (
         <div className="bg-zinc-900/80 border border-rose-900/50 rounded-2xl p-5 space-y-3 shadow-xl">
           <div className="flex items-center justify-between">
@@ -354,14 +350,14 @@ export default function RoomPage() {
             <span className="font-mono text-xs text-rose-300 font-bold">{timeLeft}с</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {activePlayers
               .filter((p) => p.user_id !== userId)
               .map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setSelectedTarget(p.id)}
-                  className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition ${
+                  className={`p-3 rounded-xl border text-xs font-semibold text-left transition ${
                     selectedTarget === p.id
                       ? 'bg-rose-950 border-rose-500 text-rose-100 shadow-md'
                       : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-300'
@@ -382,17 +378,16 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. ЛИЧНАЯ КОЛОДА КАРТ (Фиксированный Низ) */}
+      {/* 6. Колода карт пользователя (Низ экрана) */}
       {room?.phase !== 'LOBBY' && myCard && (
         <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-2xl p-3 z-50">
           <div className="max-w-5xl mx-auto space-y-2">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Ваша рука (колода)</span>
-              {isMyTurn && <span className="text-[10px] bg-emerald-500 text-zinc-950 font-bold px-2 py-0.5 rounded-full animate-bounce">ВАШ ХОД!</span>}
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Твоя колода карт</span>
+              {isMyTurn && <span className="text-[10px] bg-emerald-500 text-zinc-950 font-bold px-2.5 py-0.5 rounded-full animate-bounce">ТВОЙ ХОД!</span>}
             </div>
 
-            {/* Карты с анимацией слайда на мобильном и ПК */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <div className="flex gap-2.5 overflow-x-auto pb-2 pt-1 px-1 scrollbar-thin scrollbar-thumb-zinc-800">
               {CARD_CATEGORIES.map((cat) => {
                 const item = myCard[cat.key];
                 const isSelected = activeDeckCard === cat.key;
@@ -400,8 +395,8 @@ export default function RoomPage() {
                   <div
                     key={cat.key}
                     onClick={() => setActiveDeckCard(isSelected ? null : cat.key)}
-                    className={`flex-shrink-0 w-36 sm:w-40 bg-gradient-to-br ${cat.bg} border ${cat.border} rounded-2xl p-3 flex flex-col justify-between transition-all duration-300 cursor-pointer shadow-xl ${
-                      isSelected ? '-translate-y-4 scale-105 border-white shadow-2xl' : 'hover:-translate-y-2'
+                    className={`w-36 sm:w-40 bg-gradient-to-br ${cat.bg} border ${cat.border} rounded-2xl p-3 flex flex-col justify-between shrink-0 transition-all duration-300 cursor-pointer shadow-xl ${
+                      isSelected ? '-translate-y-3 scale-105 border-white shadow-2xl' : 'hover:-translate-y-1'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -416,7 +411,7 @@ export default function RoomPage() {
                     <div>
                       {item?.revealed ? (
                         <span className="text-[9px] bg-zinc-800/80 text-zinc-400 border border-zinc-700/50 px-2 py-0.5 rounded-full block text-center">
-                          Раскрыто
+                          Открыта
                         </span>
                       ) : (
                         <button
@@ -425,7 +420,7 @@ export default function RoomPage() {
                             handleRevealCard(cat.key);
                           }}
                           disabled={!isMyTurn || actionLoading}
-                          className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-[10px] font-extrabold py-1 rounded-full transition active:scale-95 disabled:opacity-30 disabled:hover:bg-emerald-500"
+                          className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-[10px] font-extrabold py-1.5 rounded-full transition active:scale-95 disabled:opacity-30 disabled:hover:bg-emerald-500"
                         >
                           Раскрыть
                         </button>
