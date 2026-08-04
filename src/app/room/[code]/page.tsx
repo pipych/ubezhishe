@@ -34,13 +34,82 @@ export default function RoomPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // 1. Авторизация
   useEffect(() => {
     const id = localStorage.getItem('ubezhishe_user_id');
-    if (!id) return router.push('/');
+    if (!id) {
+      router.push('/');
+      return;
+    }
     setUserId(id);
-    initRoom(id);
-  }, [roomCode]);
+  }, [router]);
 
+  // 2. Первоначальная загрузка комнаты
+  useEffect(() => {
+    if (!roomCode || !userId) return;
+
+    const fetchInitialRoom = async () => {
+      try {
+        const { data: roomData, error: roomErr } = await supabase
+          .from('rooms')
+          .select('*')
+          .eq('code', roomCode)
+          .single();
+
+        if (roomErr || !roomData) throw new Error('Комната не найдена');
+        setRoom(roomData);
+
+        await fetchPlayers(roomData.id);
+      } catch (err: any) {
+        setError(err.message || 'Ошибка загрузки комнаты');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialRoom();
+  }, [roomCode, userId]);
+
+  // 3. Подписка на Realtime (Изолированная)
+  useEffect(() => {
+    if (!room?.id || !userId) return;
+
+    const channel = supabase
+      .channel(`room_channel_${room.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` },
+        (payload) => setRoom(payload.new)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` },
+        () => fetchPlayers(room.id)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'player_cards' },
+        () => {
+          fetchMyCard(room.id, userId);
+          if (selectedPlayerId) fetchInspectedCards(selectedPlayerId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [room?.id, userId, selectedPlayerId]);
+
+  // 4. Загрузка карт при изменении фазы игры
+  useEffect(() => {
+    if (room?.id && userId && room?.phase !== 'LOBBY') {
+      fetchMyCard(room.id, userId);
+      fetchVotes(room.id, userId);
+    }
+  }, [room?.id, room?.phase, userId]);
+
+  // 5. Синхронизация таймера
   useEffect(() => {
     if (!room?.phase_expires_at) return;
     const interval = setInterval(() => {
@@ -52,44 +121,21 @@ export default function RoomPage() {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [room?.phase_expires_at, room?.host_id, userId]);
+  }, [room?.phase_expires_at, room?.host_id, room?.phase, room?.id, userId]);
 
+  // 6. Автофокус на спикера
   useEffect(() => {
     if (room?.current_speaker_id) {
       setSelectedPlayerId(room.current_speaker_id);
     }
   }, [room?.current_speaker_id]);
 
-  const initRoom = async (currentUserId: string) => {
-    try {
-      const { data: roomData, error: roomErr } = await supabase.from('rooms').select('*').eq('code', roomCode).single();
-      if (roomErr || !roomData) throw new Error('Комната не найдена');
-      setRoom(roomData);
-
-      await fetchPlayers(roomData.id);
-
-      const channel = supabase
-        .channel(`room_${roomData.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomData.id}` }, (payload) => setRoom(payload.new))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${roomData.id}` }, () => fetchPlayers(roomData.id))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'player_cards' }, () => {
-          fetchMyCard(roomData.id, currentUserId);
-          if (selectedPlayerId) fetchInspectedCards(selectedPlayerId);
-        })
-        .subscribe();
-
-      if (roomData.phase !== 'LOBBY') {
-        await fetchMyCard(roomData.id, currentUserId);
-        await fetchVotes(roomData.id, currentUserId);
-      }
-
-      return () => { supabase.removeChannel(channel); };
-    } catch (err: any) {
-      setError(err.message || 'Ошибка загрузки');
-    } finally {
-      setLoading(false);
+  // 7. Просмотр карт выбранного игрока
+  useEffect(() => {
+    if (selectedPlayerId) {
+      fetchInspectedCards(selectedPlayerId);
     }
-  };
+  }, [selectedPlayerId]);
 
   const fetchPlayers = async (roomId: string) => {
     const { data } = await supabase.from('players').select('*').eq('room_id', roomId);
@@ -100,25 +146,51 @@ export default function RoomPage() {
   };
 
   const fetchMyCard = async (roomId: string, currentUserId: string) => {
-    const { data: player } = await supabase.from('players').select('id').eq('room_id', roomId).eq('user_id', currentUserId).single();
+    const { data: player } = await supabase
+      .from('players')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('user_id', currentUserId)
+      .maybeSingle();
+
     if (!player) return;
-    const { data: card } = await supabase.from('player_cards').select('*').eq('player_id', player.id).single();
+
+    const { data: card } = await supabase
+      .from('player_cards')
+      .select('*')
+      .eq('player_id', player.id)
+      .maybeSingle();
+
     if (card) setMyCard(card);
   };
 
   const fetchVotes = async (roomId: string, currentUserId: string) => {
-    const { data: myPlayer } = await supabase.from('players').select('id').eq('room_id', roomId).eq('user_id', currentUserId).single();
+    const { data: myPlayer } = await supabase
+      .from('players')
+      .select('id')
+      .eq('room_id', roomId)
+      .eq('user_id', currentUserId)
+      .maybeSingle();
+
     if (!myPlayer) return;
-    const { data: vote } = await supabase.from('votes').select('target_id').eq('room_id', roomId).eq('voter_id', myPlayer.id).single();
+
+    const { data: vote } = await supabase
+      .from('votes')
+      .select('target_id')
+      .eq('room_id', roomId)
+      .eq('voter_id', myPlayer.id)
+      .maybeSingle();
+
     if (vote) setMyVote(vote.target_id);
   };
 
-  useEffect(() => {
-    if (selectedPlayerId) fetchInspectedCards(selectedPlayerId);
-  }, [selectedPlayerId]);
-
   const fetchInspectedCards = async (playerId: string) => {
-    const { data } = await supabase.from('public_player_cards').select('*').eq('player_id', playerId).single();
+    const { data } = await supabase
+      .from('public_player_cards')
+      .select('*')
+      .eq('player_id', playerId)
+      .maybeSingle();
+
     if (data) setInspectedCards(data);
   };
 
@@ -126,11 +198,12 @@ export default function RoomPage() {
     if (!room) return;
     setActionLoading(true);
     setError('');
+
     const { error: rpcErr } = await supabase.rpc('start_game', { p_room_id: room.id });
     if (rpcErr) {
       setError(rpcErr.message);
     } else {
-      await initRoom(userId);
+      setTimeout(() => fetchMyCard(room.id, userId), 300);
     }
     setActionLoading(false);
   };
@@ -139,11 +212,13 @@ export default function RoomPage() {
     if (!room) return;
     setActionLoading(true);
     setError('');
+
     const { error: err } = await supabase.rpc('reveal_card_and_next_turn', {
       p_room_id: room.id,
       p_user_id: userId,
       p_field_key: fieldKey,
     });
+
     if (err) setError(err.message);
     setActionLoading(false);
   };
@@ -158,7 +233,11 @@ export default function RoomPage() {
   const handleCastVote = async () => {
     if (!selectedTarget || !room) return;
     setActionLoading(true);
-    await supabase.rpc('cast_vote', { p_room_id: room.id, p_voter_user_id: userId, p_target_player_id: selectedTarget });
+    await supabase.rpc('cast_vote', {
+      p_room_id: room.id,
+      p_voter_user_id: userId,
+      p_target_player_id: selectedTarget,
+    });
     setMyVote(selectedTarget);
     setActionLoading(false);
   };
@@ -185,9 +264,9 @@ export default function RoomPage() {
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-56 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-56 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans selection:bg-emerald-500">
       
-      {/* 1. Верхний банер */}
+      {/* 1. Верхний баннер */}
       <div className="bg-zinc-900/80 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xl">
         <div className="flex items-center gap-3">
           <span className="bg-emerald-950 text-emerald-400 font-mono text-xs font-bold px-3 py-1 rounded-full border border-emerald-800/50">
@@ -197,7 +276,9 @@ export default function RoomPage() {
             <h1 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
               Раунд {room?.round_number || 1} • <span className="text-emerald-400">{room?.phase}</span>
             </h1>
-            <p className="text-[11px] text-zinc-400">Мест в бункере: {survivorsGoal} из {room?.total_initial_players || players.length}</p>
+            <p className="text-[11px] text-zinc-400">
+              Мест в бункере: {survivorsGoal} из {room?.total_initial_players || players.length}
+            </p>
           </div>
         </div>
 
@@ -227,7 +308,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 2. Описание Бункера */}
+      {/* 2. Условия Бункера */}
       {room?.phase !== 'LOBBY' && (
         <div className="bg-zinc-900/40 border border-amber-900/30 rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2 text-amber-500 text-xs font-bold uppercase tracking-wider">
@@ -242,7 +323,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 3. НАВИГАЦИОННЫЙ БАР ИГРОКОВ (Исправленная верстка плашек) */}
+      {/* 3. НАВИГАЦИОННЫЙ БАР ИГРОКОВ */}
       <div className="space-y-2">
         <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider px-1">Список игроков (нажмите для просмотра):</p>
         <div className="flex items-center gap-2.5 overflow-x-auto py-2 px-1 scrollbar-thin scrollbar-thumb-zinc-800">
@@ -310,7 +391,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 5. Управление фазами */}
+      {/* 5. Панели управления Фазами */}
       {room?.phase === 'SPEECH' && (
         <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
           {isMyTurn ? (
@@ -378,7 +459,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. Колода карт пользователя (Низ экрана) */}
+      {/* 6. ЛИЧНАЯ КОЛОДА КАРТ (Фиксированный Низ) */}
       {room?.phase !== 'LOBBY' && myCard && (
         <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-2xl p-3 z-50">
           <div className="max-w-5xl mx-auto space-y-2">
