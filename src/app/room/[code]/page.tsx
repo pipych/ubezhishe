@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -33,6 +33,9 @@ export default function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const selectedPlayerIdRef = useRef<string | null>(null);
+  selectedPlayerIdRef.current = selectedPlayerId;
 
   // 1. Авторизация
   useEffect(() => {
@@ -70,28 +73,34 @@ export default function RoomPage() {
     fetchInitialRoom();
   }, [roomCode, userId]);
 
-  // 3. Подписка Realtime
+  // 3. Стабильная подписка Realtime
   useEffect(() => {
     if (!room?.id || !userId) return;
 
     const channel = supabase
-      .channel(`room_channel_${room.id}`)
+      .channel(`realtime_room_${room.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` },
-        (payload) => setRoom(payload.new)
+        () => {
+          refreshRoomState(room.id);
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` },
-        () => fetchPlayers(room.id)
+        () => {
+          fetchPlayers(room.id);
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'player_cards' },
         () => {
           fetchMyCard(room.id, userId);
-          if (selectedPlayerId) fetchInspectedCards(selectedPlayerId);
+          if (selectedPlayerIdRef.current) {
+            fetchInspectedCards(selectedPlayerIdRef.current);
+          }
         }
       )
       .subscribe();
@@ -99,7 +108,7 @@ export default function RoomPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [room?.id, userId, selectedPlayerId]);
+  }, [room?.id, userId]);
 
   // 4. Загрузка карт при изменении фазы игры
   useEffect(() => {
@@ -146,7 +155,9 @@ export default function RoomPage() {
     const { data } = await supabase.from('players').select('*').eq('room_id', roomId);
     if (data) {
       setPlayers(data);
-      if (!selectedPlayerId && data.length > 0) setSelectedPlayerId(data[0].id);
+      if (!selectedPlayerIdRef.current && data.length > 0) {
+        setSelectedPlayerId(data[0].id);
+      }
     }
   };
 
