@@ -3,14 +3,29 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import {
+  Briefcase,
+  HeartPulse,
+  Palette,
+  Backpack,
+  Scroll,
+  Zap,
+  HelpCircle,
+  AlertTriangle,
+  Skull,
+  ShieldCheck,
+  PartyPopper,
+  Mic,
+  X
+} from 'lucide-react';
 
 const CARD_CATEGORIES = [
-  { key: 'profession', label: 'Профессия', icon: '💼', color: 'text-sky-400', border: 'border-sky-500/40', angle: -15, translateY: 8 },
-  { key: 'health', label: 'Здоровье', icon: '🫀', color: 'text-rose-400', border: 'border-rose-500/40', angle: -9, translateY: 2 },
-  { key: 'hobby', label: 'Хобби', icon: '🎨', color: 'text-purple-400', border: 'border-purple-500/40', angle: -3, translateY: 0 },
-  { key: 'baggage', label: 'Багаж', icon: '🎒', color: 'text-amber-400', border: 'border-amber-500/40', angle: 3, translateY: 0 },
-  { key: 'fact', label: 'Факты', icon: '📜', color: 'text-indigo-400', border: 'border-indigo-500/40', angle: 9, translateY: 2 },
-  { key: 'special_condition', label: 'Спец. условие', icon: '⚡', color: 'text-emerald-400', border: 'border-emerald-500/40', angle: 15, translateY: 8 },
+  { key: 'profession', label: 'Профессия', icon: Briefcase, color: 'text-sky-400', border: 'border-sky-500/40', angle: -15, translateY: 8 },
+  { key: 'health', label: 'Здоровье', icon: HeartPulse, color: 'text-rose-400', border: 'border-rose-500/40', angle: -9, translateY: 2 },
+  { key: 'hobby', label: 'Хобби', icon: Palette, color: 'text-purple-400', border: 'border-purple-500/40', angle: -3, translateY: 0 },
+  { key: 'baggage', label: 'Багаж', icon: Backpack, color: 'text-amber-400', border: 'border-amber-500/40', angle: 3, translateY: 0 },
+  { key: 'fact', label: 'Факты', icon: Scroll, color: 'text-indigo-400', border: 'border-indigo-500/40', angle: 9, translateY: 2 },
+  { key: 'special_condition', label: 'Спец. условие', icon: Zap, color: 'text-emerald-400', border: 'border-emerald-500/40', angle: 15, translateY: 8 },
 ];
 
 export default function RoomPage() {
@@ -32,8 +47,8 @@ export default function RoomPage() {
 
   const [cardRevealOverlay, setCardRevealOverlay] = useState<{
     playerName: string;
+    categoryKey: string;
     categoryLabel: string;
-    icon: string;
     val: string;
     color: string;
   } | null>(null);
@@ -82,7 +97,7 @@ export default function RoomPage() {
     fetchInitialRoom();
   }, [roomCode, userId]);
 
-  const showCardOverlay = (data: { playerName: string; categoryLabel: string; icon: string; val: string; color: string }) => {
+  const showCardOverlay = (data: { playerName: string; categoryKey: string; categoryLabel: string; val: string; color: string }) => {
     if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
     setCardRevealOverlay(data);
     overlayTimerRef.current = setTimeout(() => {
@@ -267,8 +282,8 @@ export default function RoomPage() {
           event: 'card_revealed',
           payload: {
             playerName: mePlayer.name,
+            categoryKey: cat.key,
             categoryLabel: cat.label,
-            icon: cat.icon,
             val,
             color: cat.color,
           },
@@ -331,6 +346,10 @@ export default function RoomPage() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const OverlayIcon = cardRevealOverlay
+    ? CARD_CATEGORIES.find((c) => c.key === cardRevealOverlay.categoryKey)?.icon || Zap
+    : Zap;
+
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 pb-72 p-3 sm:p-6 max-w-5xl mx-auto flex flex-col gap-5 font-sans">
       
@@ -372,7 +391,9 @@ export default function RoomPage() {
       {error && (
         <div className="bg-rose-950/80 border border-rose-800 text-rose-200 text-xs p-3.5 rounded-2xl flex justify-between items-center shadow-lg">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="font-bold ml-3 text-rose-400 hover:text-rose-100">✕</button>
+          <button onClick={() => setError('')} className="font-bold ml-3 text-rose-400 hover:text-rose-100">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -380,7 +401,8 @@ export default function RoomPage() {
       {room?.phase !== 'LOBBY' && (
         <div className="bg-zinc-900/40 border border-amber-900/30 rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2 text-amber-500 text-xs font-bold uppercase tracking-wider">
-            <span>⚠️</span> Условия катастрофы
+            <AlertTriangle className="w-4 h-4" />
+            <span>Условия катастрофы</span>
           </div>
           <p className="text-xs text-amber-100/90 font-medium">{room?.bunker_info?.catastrophe}</p>
           <div className="flex flex-wrap gap-4 text-[11px] text-zinc-400 pt-1">
@@ -409,7 +431,11 @@ export default function RoomPage() {
                 } ${p.is_kicked ? 'opacity-40 line-through bg-rose-950/30 border-rose-900/40 text-rose-300' : ''}`}
               >
                 <span>{p.name}</span>
-                {isSpeaking && <span className="bg-amber-400 text-zinc-950 text-[9px] px-2 py-0.5 rounded-full font-black">СПИКЕР</span>}
+                {isSpeaking && (
+                  <span className="bg-amber-400 text-zinc-950 text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1">
+                    <Mic className="w-2.5 h-2.5" /> СПИКЕР
+                  </span>
+                )}
                 {p.is_kicked && <span className="text-[9px] text-rose-400 font-extrabold">ИЗГНАН</span>}
               </button>
             );
@@ -417,7 +443,7 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {/* 4. РЯД КАРТ ВЫБРАННОГО ИГРОКА (БОЛЬШОЙ РАЗМЕР, ТЕМНЫЙ ДИЗАЙН, БЕЗ ТОЧЕК) */}
+      {/* 4. РЯД КАРТ ВЫБРАННОГО ИГРОКА */}
       {selectedPlayer && inspectedCards && (
         <div className="bg-zinc-900/70 border border-zinc-800/80 backdrop-blur-xl rounded-3xl p-5 space-y-4 shadow-2xl">
           <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
@@ -427,14 +453,15 @@ export default function RoomPage() {
               </h2>
             </div>
             {room?.current_speaker_id === selectedPlayer.id && (
-              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-3 py-1 rounded-full animate-pulse font-semibold">
-                Выступает
+              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-3 py-1 rounded-full animate-pulse font-semibold flex items-center gap-1.5">
+                <Mic className="w-3.5 h-3.5" /> Выступает
               </span>
             )}
           </div>
 
           <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin scrollbar-thumb-zinc-800">
             {CARD_CATEGORIES.map((cat) => {
+              const IconComponent = cat.icon;
               const val = inspectedCards[cat.key];
               const isRevealed = inspectedCards[`${cat.key}_revealed`];
               return (
@@ -442,24 +469,21 @@ export default function RoomPage() {
                   key={cat.key}
                   className={`w-36 sm:w-44 h-56 bg-zinc-900 border-2 ${cat.border} rounded-2xl p-3 flex flex-col justify-between shrink-0 shadow-xl relative overflow-hidden`}
                 >
-                  {/* Верхний левый угол: иконка и название */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{cat.icon}</span>
+                    <IconComponent className={`w-4 h-4 shrink-0 ${cat.color}`} />
                     <span className={`text-[10px] font-black uppercase tracking-wider ${cat.color}`}>{cat.label}</span>
                   </div>
 
-                  {/* Содержание в центре: текст или знак вопроса */}
                   <div className="my-auto text-center px-1">
                     {isRevealed ? (
                       <p className="text-xs font-bold text-zinc-100 leading-snug">
                         {val}
                       </p>
                     ) : (
-                      <span className="text-4xl font-black text-zinc-700 select-none">❓</span>
+                      <HelpCircle className="w-8 h-8 text-zinc-700 mx-auto" />
                     )}
                   </div>
 
-                  {/* Статус карты */}
                   <div className="text-center">
                     <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
                       isRevealed ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : 'bg-zinc-800 text-zinc-500'
@@ -479,7 +503,7 @@ export default function RoomPage() {
         <div className="bg-zinc-900/50 border border-emerald-900/40 rounded-2xl p-4 text-center">
           {isMyTurn ? (
             <p className="text-xs text-emerald-400 font-bold animate-pulse uppercase tracking-wider">
-              🗣️ Ваша очередь выступать! Выберите карту из своей колоды и нажмите «Раскрыть».
+              Ваша очередь выступать! Выберите карту из своей колоды и нажмите «Раскрыть».
             </p>
           ) : (
             <p className="text-xs text-zinc-400">
@@ -542,15 +566,15 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. ТЕМНАЯ ЛИЧНАЯ КОЛОДА КАРТ (ВЕЕР) */}
+      {/* 6. ЛИЧНАЯ КОЛОДА КАРТ */}
       {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
         <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none pb-2 pt-10 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent">
           <div className="max-w-4xl mx-auto px-4 pointer-events-auto relative">
             
             <div className="flex items-center justify-center mb-2">
               {isMyTurn ? (
-                <span className="bg-emerald-500 text-zinc-950 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-lg shadow-emerald-500/30 animate-bounce">
-                  ⚡ Ваш ход! Раскройте одну карту
+                <span className="bg-emerald-500 text-zinc-950 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-lg shadow-emerald-500/30 animate-bounce flex items-center gap-1">
+                  <Zap className="w-3 h-3 fill-zinc-950" /> Ваш ход! Раскройте одну карту
                 </span>
               ) : (
                 <span className="bg-zinc-900/90 border border-zinc-800 text-zinc-400 text-[10px] font-bold uppercase px-3 py-1 rounded-full backdrop-blur-md">
@@ -561,6 +585,7 @@ export default function RoomPage() {
 
             <div className="flex justify-center items-end -space-x-8 sm:-space-x-12 min-h-[230px] pt-4 pb-2">
               {CARD_CATEGORIES.map((cat, index) => {
+                const IconComponent = cat.icon;
                 const item = myCard[cat.key];
                 const isSelected = activeDeckCard === cat.key;
                 const canShowRevealButton = isSelected && isMyTurn && !item?.revealed;
@@ -581,20 +606,17 @@ export default function RoomPage() {
                         : 'hover:-translate-y-12 hover:rotate-0 hover:z-30 hover:scale-105'
                     }`}
                   >
-                    {/* Верхний левый угол: иконка и имя карточки */}
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs sm:text-sm">{cat.icon}</span>
+                      <IconComponent className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${cat.color}`} />
                       <span className={`text-[9px] font-black uppercase tracking-wider ${cat.color}`}>{cat.label}</span>
                     </div>
 
-                    {/* Содержание в центре */}
                     <div className="my-auto text-center px-1 z-10">
                       <p className="text-xs font-bold text-zinc-100 leading-tight">
                         {item?.val}
                       </p>
                     </div>
 
-                    {/* Нижняя часть: Сообщение или Кнопка раскрытия */}
                     <div className="z-10 mt-1">
                       {item?.revealed ? (
                         <div className="w-full bg-zinc-800/80 text-zinc-400 text-[9px] font-bold py-1 rounded-lg text-center border border-zinc-700/50 uppercase">
@@ -637,8 +659,8 @@ export default function RoomPage() {
               </h3>
             </div>
 
-            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 shadow-inner space-y-2">
-              <div className="text-4xl">{cardRevealOverlay.icon}</div>
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 shadow-inner space-y-2 flex flex-col items-center">
+              <OverlayIcon className={`w-10 h-10 ${cardRevealOverlay.color}`} />
               <p className={`text-xs font-extrabold uppercase tracking-wider ${cardRevealOverlay.color}`}>
                 {cardRevealOverlay.categoryLabel}
               </p>
@@ -661,8 +683,8 @@ export default function RoomPage() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl">
             <div>
               {me?.is_kicked ? (
-                <div className="space-y-2">
-                  <span className="text-5xl">💀</span>
+                <div className="space-y-2 flex flex-col items-center">
+                  <Skull className="w-12 h-12 text-rose-500" />
                   <h2 className="text-2xl font-black text-rose-500 uppercase tracking-wide">
                     Вы не выжили
                   </h2>
@@ -671,8 +693,8 @@ export default function RoomPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <span className="text-5xl">🎉</span>
+                <div className="space-y-2 flex flex-col items-center">
+                  <PartyPopper className="w-12 h-12 text-emerald-400" />
                   <h2 className="text-2xl font-black text-emerald-400 uppercase tracking-wide">
                     Вы выжили!
                   </h2>
@@ -686,7 +708,7 @@ export default function RoomPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
               <div className="bg-emerald-950/30 border border-emerald-900/50 rounded-2xl p-4 space-y-2">
                 <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🛡️</span> Выжили ({activePlayers.length})
+                  <ShieldCheck className="w-4 h-4" /> Выжили ({activePlayers.length})
                 </h3>
                 <ul className="space-y-1 max-h-40 overflow-y-auto">
                   {activePlayers.map((p) => (
@@ -700,7 +722,7 @@ export default function RoomPage() {
 
               <div className="bg-rose-950/30 border border-rose-900/50 rounded-2xl p-4 space-y-2">
                 <h3 className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🪦</span> Погибли ({kickedPlayers.length})
+                  <Skull className="w-4 h-4" /> Погибли ({kickedPlayers.length})
                 </h3>
                 <ul className="space-y-1 max-h-40 overflow-y-auto">
                   {kickedPlayers.length === 0 ? (
