@@ -44,6 +44,14 @@ const CARD_CATEGORIES = [
   { key: 'fact', label: 'Факты', icon: Scroll, color: 'text-indigo-400', border: 'border-indigo-500/40', angle: 25, translateY: 12 },
 ];
 
+const getCatastropheImageUrl = (catastropheTitle: string, roomSeed: string) => {
+  if (!catastropheTitle) return null;
+  const prompt = encodeURIComponent(
+    `cinematic 16:9 aspect ratio, post-apocalyptic scene, catastrophe: ${catastropheTitle}, dark atmospheric background, highly detailed, photorealistic, 8k`
+  );
+  return `https://image.pollinations.ai/prompt/${prompt}?width=1280&height=720&nologo=true&seed=${roomSeed}`;
+};
+
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -601,9 +609,23 @@ export default function RoomPage() {
             <h3 className="text-xs sm:text-sm font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" /> Катастрофа
             </h3>
-            <div className="bg-zinc-950/60 p-5 rounded-2xl border border-zinc-800/80 space-y-2">
-              <p className="text-base sm:text-lg font-black text-amber-400">{room?.bunker_info?.catastrophe}</p>
-              <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-medium">{room?.bunker_info?.catastrophe_desc}</p>
+            <div className="bg-zinc-950/60 rounded-2xl border border-zinc-800/80 overflow-hidden space-y-3 p-5">
+              {room?.bunker_info?.catastrophe && (
+                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
+                  <img
+                    src={getCatastropheImageUrl(room.bunker_info.catastrophe, room.code || room.id) || ''}
+                    alt={room.bunker_info.catastrophe}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+              <div>
+                <p className="text-base sm:text-lg font-black text-amber-400">{room?.bunker_info?.catastrophe}</p>
+                <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed font-medium mt-1">
+                  {room?.bunker_info?.catastrophe_desc}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -813,10 +835,22 @@ export default function RoomPage() {
             </div>
 
             {/* Катастрофа */}
-            <div className="bg-zinc-950 border border-zinc-800 p-5 rounded-2xl space-y-2">
+            <div className="bg-zinc-950 border border-zinc-800 p-5 rounded-2xl space-y-3">
               <span className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4" /> Катастрофа
               </span>
+
+              {room?.bunker_info?.catastrophe && (
+                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
+                  <img
+                    src={getCatastropheImageUrl(room.bunker_info.catastrophe, room.code || room.id) || ''}
+                    alt={room.bunker_info.catastrophe}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+
               <h3 className="text-base sm:text-lg font-extrabold text-amber-400">{room?.bunker_info?.catastrophe}</h3>
               <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">{room?.bunker_info?.catastrophe_desc}</p>
             </div>
