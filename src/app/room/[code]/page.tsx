@@ -730,8 +730,9 @@ export default function RoomPage() {
               <div className="flex gap-3 overflow-x-auto py-2 scrollbar-thin scrollbar-thumb-zinc-800">
                 {CARD_CATEGORIES.map((cat) => {
                   const IconComponent = cat.icon;
-                  const val = inspectedCards[cat.key];
-                  const isRevealed = inspectedCards[`${cat.key}_revealed`];
+                  const cardData = inspectedCards[cat.key];
+                  const val = cardData?.val;
+                  const isRevealed = cardData?.revealed;
                   return (
                     <div
                       key={cat.key}
