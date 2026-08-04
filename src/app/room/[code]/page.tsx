@@ -26,7 +26,11 @@ import {
   Clock,
   Vote,
   Pencil,
-  Check
+  Check,
+  Target,
+  DoorOpen,
+  DoorClosed,
+  Home
 } from 'lucide-react';
 
 const CARD_CATEGORIES = [
@@ -60,15 +64,10 @@ export default function RoomPage() {
   const [isEditingName, setIsEditingName] = useState<boolean>(false);
   const [editingName, setEditingName] = useState<string>('');
 
-  const [cardRevealOverlay, setCardRevealOverlay] = useState<{
-    playerName: string;
-    categoryKey: string;
-    categoryLabel: string;
-    val: string;
-    color: string;
-  } | null>(null);
-
-  const [voteResultsOverlay, setVoteResultsOverlay] = useState<{ name: string; votes: number; isKicked: boolean }[] | null>(null);
+  // Оверлеи
+  const [cardRevealOverlay, setCardRevealOverlay] = useState<any>(null);
+  const [voteResultsOverlay, setVoteResultsOverlay] = useState<any>(null);
+  const [roomRevealOverlay, setRoomRevealOverlay] = useState<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -78,6 +77,8 @@ export default function RoomPage() {
   selectedPlayerIdRef.current = selectedPlayerId;
 
   const prevPhaseRef = useRef<string | null>(null);
+  const prevRoomsCountRef = useRef<number>(0);
+
   const channelRef = useRef<any>(null);
   const overlayTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -104,6 +105,7 @@ export default function RoomPage() {
         if (roomErr || !roomData) throw new Error('Комната не найдена');
         setRoom(roomData);
         prevPhaseRef.current = roomData.phase;
+        prevRoomsCountRef.current = roomData.bunker_info?.revealed_rooms?.length || 0;
 
         await fetchPlayers(roomData.id);
       } catch (err: any) {
@@ -116,12 +118,15 @@ export default function RoomPage() {
     fetchInitialRoom();
   }, [roomCode, userId]);
 
-  const showCardOverlay = (data: { playerName: string; categoryKey: string; categoryLabel: string; val: string; color: string }) => {
+  const showCardOverlay = (data: any) => {
     if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
     setCardRevealOverlay(data);
-    overlayTimerRef.current = setTimeout(() => {
-      setCardRevealOverlay(null);
-    }, 5000);
+    overlayTimerRef.current = setTimeout(() => setCardRevealOverlay(null), 5000);
+  };
+
+  const showRoomOverlay = (roomObj: any) => {
+    setRoomRevealOverlay(roomObj);
+    setTimeout(() => setRoomRevealOverlay(null), 5000);
   };
 
   const showVoteResults = async (roomId: string) => {
@@ -143,9 +148,7 @@ export default function RoomPage() {
         .sort((a, b) => b.votes - a.votes);
 
       setVoteResultsOverlay(summary);
-      setTimeout(() => {
-        setVoteResultsOverlay(null);
-      }, 5000);
+      setTimeout(() => setVoteResultsOverlay(null), 5000);
     }
   };
 
@@ -153,13 +156,9 @@ export default function RoomPage() {
     if (!room?.id || !userId) return;
 
     const channel = supabase
-      .channel(`realtime_room_${room.id}`, {
-        config: { broadcast: { self: true } },
-      })
+      .channel(`realtime_room_${room.id}`, { config: { broadcast: { self: true } } })
       .on('broadcast', { event: 'card_revealed' }, (payload) => {
-        if (payload?.payload) {
-          showCardOverlay(payload.payload);
-        }
+        if (payload?.payload) showCardOverlay(payload.payload);
       })
       .on(
         'postgres_changes',
@@ -169,7 +168,15 @@ export default function RoomPage() {
           if (prevPhaseRef.current === 'VOTING' && newRoom.phase !== 'VOTING') {
             showVoteResults(room.id);
           }
+
+          // Проверка раскрытия новой комнаты
+          const newRoomsArr = newRoom.bunker_info?.revealed_rooms || [];
+          if (newRoomsArr.length > prevRoomsCountRef.current && newRoomsArr.length > 0) {
+            showRoomOverlay(newRoomsArr[newRoomsArr.length - 1]);
+          }
+          prevRoomsCountRef.current = newRoomsArr.length;
           prevPhaseRef.current = newRoom.phase;
+
           setRoom(newRoom);
         }
       )
@@ -183,9 +190,7 @@ export default function RoomPage() {
         { event: '*', schema: 'public', table: 'player_cards' },
         () => {
           fetchMyCard(room.id, userId);
-          if (selectedPlayerIdRef.current) {
-            fetchInspectedCards(selectedPlayerIdRef.current);
-          }
+          if (selectedPlayerIdRef.current) fetchInspectedCards(selectedPlayerIdRef.current);
         }
       )
       .subscribe();
@@ -206,7 +211,7 @@ export default function RoomPage() {
   }, [room?.id, room?.phase, userId]);
 
   useEffect(() => {
-    if (!room?.phase_expires_at) return;
+    if (!room?.phase_expires_at || room?.phase === 'START_OVERLAY') return;
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((new Date(room.phase_expires_at).getTime() - Date.now()) / 1000));
       setTimeLeft(diff);
@@ -310,8 +315,16 @@ export default function RoomPage() {
       setError(`Ошибка запуска: ${rpcErr.message}`);
     } else {
       await refreshRoomState(room.id);
-      await fetchMyCard(room.id, userId);
     }
+    setActionLoading(false);
+  };
+
+  const handleReadyStart = async () => {
+    if (!room) return;
+    setActionLoading(true);
+    const { error: err } = await supabase.rpc('player_ready_start', { p_room_id: room.id, p_user_id: userId });
+    if (err) setError(err.message);
+    else await refreshRoomState(room.id);
     setActionLoading(false);
   };
 
@@ -379,11 +392,8 @@ export default function RoomPage() {
     if (!room) return;
     setActionLoading(true);
     const { error: err } = await supabase.rpc('skip_discussion', { p_room_id: room.id, p_user_id: userId });
-    if (err) {
-      setError(err.message);
-    } else {
-      await refreshRoomState(room.id);
-    }
+    if (err) setError(err.message);
+    else await refreshRoomState(room.id);
     setActionLoading(false);
   };
 
@@ -395,9 +405,8 @@ export default function RoomPage() {
       p_voter_user_id: userId,
       p_target_player_id: selectedTarget,
     });
-    if (err) {
-      setError(err.message);
-    } else {
+    if (err) setError(err.message);
+    else {
       setMyVote(selectedTarget);
       await refreshRoomState(room.id);
     }
@@ -420,6 +429,9 @@ export default function RoomPage() {
   const isMyTurn = room?.phase === 'SPEECH' && room?.current_speaker_id === me?.id;
   const survivorsGoal = Math.ceil((room?.total_initial_players || players.length) / 2);
   const hasSkippedDiscussion = room?.skip_votes?.includes(userId);
+
+  const readyUserIds = room?.bunker_info?.ready_user_ids || [];
+  const hasPressedReady = readyUserIds.includes(userId);
 
   const formatTimer = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -450,7 +462,7 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && (
+        {room?.phase !== 'LOBBY' && room?.phase !== 'START_OVERLAY' && room?.phase !== 'ENDED' && (
           <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-4 py-1.5 rounded-full">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
             <span className="font-mono text-sm font-bold text-emerald-400">{formatTimer(timeLeft)}</span>
@@ -536,19 +548,43 @@ export default function RoomPage() {
             <Shield className="w-6 h-6" />
             <div>
               <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">Информация о Бункере</h2>
-              <p className="text-[11px] text-zinc-400">Все параметры выживания и характеристика убежища</p>
+              <p className="text-[11px] text-zinc-400">Все параметры выживания и характеристики убежища</p>
             </div>
           </div>
 
+          {/* Катастрофа */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" /> Катастрофа
             </h3>
-            <p className="text-xs sm:text-sm text-zinc-200 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-800/80 leading-relaxed font-medium">
-              {room?.bunker_info?.catastrophe || 'Данные не загружены'}
-            </p>
+            <div className="bg-zinc-950/60 p-4 rounded-2xl border border-zinc-800/80 space-y-1.5">
+              <p className="text-sm font-black text-amber-400">{room?.bunker_info?.catastrophe}</p>
+              <p className="text-xs text-zinc-300 leading-relaxed font-medium">{room?.bunker_info?.catastrophe_desc}</p>
+            </div>
           </div>
 
+          {/* Цель игры */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+              <Target className="w-4 h-4 text-emerald-400" /> Цель игры
+            </h3>
+            <div className="bg-zinc-950/60 p-4 rounded-2xl border border-zinc-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-black text-emerald-400">{room?.bunker_info?.goal_title}</p>
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                  room?.bunker_info?.can_exit 
+                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' 
+                    : 'bg-rose-950 text-rose-400 border border-rose-800'
+                }`}>
+                  {room?.bunker_info?.can_exit ? <DoorOpen className="w-3 h-3" /> : <DoorClosed className="w-3 h-3" />}
+                  {room?.bunker_info?.can_exit ? 'Можно выходить' : 'Выход запрещен'}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-300 leading-relaxed font-medium">{room?.bunker_info?.goal_desc}</p>
+            </div>
+          </div>
+
+          {/* Параметры Бункера */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-zinc-950/60 border border-zinc-800 p-4 rounded-2xl flex items-center gap-3">
               <Building className="w-5 h-5 text-sky-400 shrink-0" />
@@ -572,6 +608,23 @@ export default function RoomPage() {
                 <p className="text-[10px] text-zinc-500 font-bold uppercase">Время нахождения</p>
                 <p className="text-xs font-semibold text-zinc-200">{room?.bunker_info?.duration || '—'}</p>
               </div>
+            </div>
+          </div>
+
+          {/* Список раскрытых комнат бункера */}
+          <div className="space-y-3 pt-2">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+              <Home className="w-4 h-4 text-sky-400" /> Раскрытые помещения бункера ({room?.bunker_info?.revealed_rooms?.length || 0})
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-3">
+              {room?.bunker_info?.revealed_rooms?.map((rm: any, idx: number) => (
+                <div key={idx} className="bg-zinc-950/70 border border-sky-900/40 p-4 rounded-2xl space-y-1">
+                  <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider">Комната #{idx + 1}</span>
+                  <h4 className="text-xs font-extrabold text-zinc-100">{rm.title}</h4>
+                  <p className="text-xs text-zinc-400 leading-snug">{rm.description}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -682,7 +735,104 @@ export default function RoomPage() {
         </>
       )}
 
-      {/* 4. ОВЕРЛЕЙ ГОЛОСОВАНИЯ (ПОВЕРХ ВСЕГО) */}
+      {/* 4. СТАРТОВЫЙ ОВЕРЛЕЙ КАТАСТРОФЫ И ЦЕЛИ (НА ВЕСЬ ЭКРАН) */}
+      {room?.phase === 'START_OVERLAY' && (
+        <div className="fixed inset-0 bg-zinc-950/95 backdrop-blur-2xl z-[130] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-5 text-left overflow-y-auto max-h-[90vh]">
+            
+            <div className="text-center space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-950 px-3 py-1 rounded-full border border-amber-800">
+                Начало игры • Ознакомление
+              </span>
+              <h2 className="text-xl font-black text-zinc-100 pt-2">Условия выживания</h2>
+            </div>
+
+            {/* Катастрофа */}
+            <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl space-y-1.5">
+              <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" /> Катастрофа
+              </span>
+              <h3 className="text-sm font-extrabold text-amber-400">{room?.bunker_info?.catastrophe}</h3>
+              <p className="text-xs text-zinc-300 leading-relaxed">{room?.bunker_info?.catastrophe_desc}</p>
+            </div>
+
+            {/* Цель */}
+            <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                  <Target className="w-3.5 h-3.5" /> Цель выживания
+                </span>
+                <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                  room?.bunker_info?.can_exit 
+                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' 
+                    : 'bg-rose-950 text-rose-400 border border-rose-800'
+                }`}>
+                  {room?.bunker_info?.can_exit ? 'Можно выходить' : 'Выход запрещен'}
+                </span>
+              </div>
+              <h4 className="text-xs font-black text-emerald-400">{room?.bunker_info?.goal_title}</h4>
+              <p className="text-xs text-zinc-300 leading-relaxed">{room?.bunker_info?.goal_desc}</p>
+            </div>
+
+            {/* Характеристики */}
+            <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
+              <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                <span className="text-zinc-500 block uppercase">Площадь</span>
+                <span className="text-zinc-200">{room?.bunker_info?.size}</span>
+              </div>
+              <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                <span className="text-zinc-500 block uppercase">Еда</span>
+                <span className="text-zinc-200">{room?.bunker_info?.food}</span>
+              </div>
+              <div className="bg-zinc-950 p-2.5 rounded-xl border border-zinc-800">
+                <span className="text-zinc-500 block uppercase">Срок</span>
+                <span className="text-zinc-200">{room?.bunker_info?.duration}</span>
+              </div>
+            </div>
+
+            <div className="pt-2 space-y-3 text-center">
+              <p className="text-[11px] text-zinc-400">
+                Готовы начать: <span className="text-emerald-400 font-bold">{readyUserIds.length}</span> из <span className="text-zinc-200 font-bold">{activePlayers.length}</span> игроков
+              </p>
+
+              <button
+                onClick={handleReadyStart}
+                disabled={actionLoading || hasPressedReady}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs py-3.5 rounded-2xl transition active:scale-95 disabled:opacity-50 shadow-lg shadow-emerald-950/50 uppercase tracking-wider"
+              >
+                {hasPressedReady ? 'Ожидание остальных игроков...' : 'Дальше'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 5. ОВЕРЛЕЙ РАСКРЫТОЙ КОМНАТЫ БУНКЕРА (5 СЕКУНД) */}
+      {roomRevealOverlay && (
+        <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-xl z-[128] flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border-2 border-sky-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_0_50px_rgba(14,165,233,0.2)] text-center space-y-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-sky-400 bg-sky-950 px-3 py-1 rounded-full border border-sky-800">
+              Новое помещение бункера!
+            </span>
+
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 space-y-2 text-left">
+              <h3 className="text-sm font-black text-sky-400 flex items-center gap-2">
+                <Home className="w-4 h-4" /> {roomRevealOverlay.title}
+              </h3>
+              <p className="text-xs text-zinc-200 leading-relaxed">
+                {roomRevealOverlay.description}
+              </p>
+            </div>
+
+            <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-sky-500 h-full w-full transition-all duration-[5000ms] ease-linear w-0" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. ОВЕРЛЕЙ ГОЛОСОВАНИЯ */}
       {room?.phase === 'VOTING' && !me?.is_kicked && (
         <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[110] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border-2 border-rose-900/80 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl text-center relative">
@@ -729,7 +879,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 5. ОВЕРЛЕЙ ИТОГОВ ГОЛОСОВАНИЯ (5 СЕКУНД) */}
+      {/* 7. ОВЕРЛЕЙ ИТОГОВ ГОЛОСОВАНИЯ (5 СЕКУНД) */}
       {voteResultsOverlay && (
         <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-xl z-[125] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-[0_0_50px_rgba(245,158,11,0.2)] text-center space-y-5">
@@ -741,7 +891,7 @@ export default function RoomPage() {
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {voteResultsOverlay.map((res, idx) => (
+              {voteResultsOverlay.map((res: any, idx: number) => (
                 <div
                   key={idx}
                   className={`flex items-center justify-between p-3 rounded-2xl border ${
@@ -768,11 +918,11 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 6. ФИКСИРОВАННЫЙ НИЖНИЙ БЛОК: СВОРАЧИВАЕМАЯ КОЛОДА + ПАНЕЛЬ ВКЛАДОК */}
+      {/* 8. ФИКСИРОВАННЫЙ НИЖНИЙ БЛОК: СВОРАЧИВАЕМАЯ КОЛОДА + ПАНЕЛЬ ВКЛАДОК */}
       <div className="fixed bottom-0 left-0 right-0 z-[80] pointer-events-none flex flex-col items-center">
         
-        {/* А) ЛИЧНАЯ КОЛОДА КАРТ */}
-        {room?.phase !== 'LOBBY' && room?.phase !== 'ENDED' && myCard && (
+        {/* ЛИЧНАЯ КОЛОДА КАРТ */}
+        {room?.phase !== 'LOBBY' && room?.phase !== 'START_OVERLAY' && room?.phase !== 'ENDED' && myCard && (
           <div className="w-full max-w-4xl px-4 pointer-events-auto transition-all duration-300">
             
             <div className="flex justify-center mb-1">
@@ -849,7 +999,7 @@ export default function RoomPage() {
           </div>
         )}
 
-        {/* Б) ПАНЕЛЬ ВКЛАДОК СТОЛ И БУНКЕР С КНОПКОЙ СКИПА */}
+        {/* ПАНЕЛЬ ВКЛАДОК СТОЛ И БУНКЕР С КНОПКОЙ СКИПА */}
         <div className="w-full bg-zinc-950/95 border-t border-zinc-800/90 backdrop-blur-2xl px-6 py-3 pointer-events-auto">
           <div className="max-w-md mx-auto flex items-center justify-between gap-4">
             
@@ -897,7 +1047,7 @@ export default function RoomPage() {
 
       </div>
 
-      {/* 7. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
+      {/* 9. ОВЕРЛЕЙ РАСКРЫТОЙ КАРТЫ (5 СЕКУНД) */}
       {cardRevealOverlay && (
         <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-[120] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border-2 border-emerald-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-[0_0_50px_rgba(16,185,129,0.2)] text-center relative overflow-hidden space-y-4">
@@ -927,7 +1077,7 @@ export default function RoomPage() {
         </div>
       )}
 
-      {/* 8. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
+      {/* 10. ОКНО РЕЗУЛЬТАТОВ ИГРЫ */}
       {room?.phase === 'ENDED' && (
         <div className="fixed inset-0 bg-zinc-950/90 backdrop-blur-2xl z-[100] flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 text-center shadow-2xl">
