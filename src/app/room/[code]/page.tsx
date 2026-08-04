@@ -133,7 +133,7 @@ export default function RoomPage() {
     setTimeout(() => setRoomRevealOverlay(null), 5000);
   };
 
-const showVoteResults = (roomData: any) => {
+  const showVoteResults = (roomData: any) => {
     const summary = roomData?.bunker_info?.last_voting_results;
     if (summary && Array.isArray(summary) && summary.length > 0) {
       setVoteResultsOverlay(summary);
@@ -156,58 +156,6 @@ const showVoteResults = (roomData: any) => {
           const newRoom = payload.new;
           if (prevPhaseRef.current === 'VOTING' && newRoom.phase !== 'VOTING') {
             showVoteResults(newRoom);
-          }
-
-          const newRoomsArr = newRoom.bunker_info?.revealed_rooms || [];
-          
-          if (
-            (prevPhaseRef.current === 'START_OVERLAY' && newRoom.phase === 'SPEECH' && newRoomsArr.length > 0) ||
-            (newRoomsArr.length > prevRoomsCountRef.current && newRoomsArr.length > 0)
-          ) {
-            showRoomOverlay(newRoomsArr[newRoomsArr.length - 1]);
-          }
-
-          prevRoomsCountRef.current = newRoomsArr.length;
-          prevPhaseRef.current = newRoom.phase;
-
-          setRoom(newRoom);
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${room.id}` },
-        () => fetchPlayers(room.id)
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'player_cards' },
-        () => {
-          fetchMyCard(room.id, userId);
-          if (selectedPlayerIdRef.current) fetchInspectedCards(selectedPlayerIdRef.current);
-        }
-      )
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
-    };
-  }, [room?.id, userId]);
-
-    const channel = supabase
-      .channel(`realtime_room_${room.id}`, { config: { broadcast: { self: true } } })
-      .on('broadcast', { event: 'card_revealed' }, (payload) => {
-        if (payload?.payload) showCardOverlay(payload.payload);
-      })
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` },
-        (payload: any) => {
-          const newRoom = payload.new;
-          if (prevPhaseRef.current === 'VOTING' && newRoom.phase !== 'VOTING') {
-            showVoteResults(room.id);
           }
 
           const newRoomsArr = newRoom.bunker_info?.revealed_rooms || [];
@@ -284,7 +232,7 @@ const showVoteResults = (roomData: any) => {
     const { data: freshRoom } = await supabase.from('rooms').select('*').eq('id', roomId).single();
     if (freshRoom) {
       if (prevPhaseRef.current === 'VOTING' && freshRoom.phase !== 'VOTING') {
-        showVoteResults(roomId);
+        showVoteResults(freshRoom);
       }
       prevPhaseRef.current = freshRoom.phase;
       setRoom(freshRoom);
