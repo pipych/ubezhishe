@@ -31,7 +31,9 @@ import {
   DoorOpen,
   DoorClosed,
   Home,
-  Dna
+  Dna,
+  Copy,
+  CheckCheck
 } from 'lucide-react';
 
 const CARD_CATEGORIES = [
@@ -464,6 +466,16 @@ export default function RoomPage() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  const handleCopyInvite = () => {
+    const link = `${window.location.origin}/join/${room?.code}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    });
+  };
+
   const OverlayIcon = cardRevealOverlay
     ? CARD_CATEGORIES.find((c) => c.key === cardRevealOverlay.categoryKey)?.icon || Briefcase
     : Briefcase;
@@ -477,6 +489,17 @@ export default function RoomPage() {
           <span className="bg-emerald-950 text-emerald-400 font-mono text-xs font-bold px-3 py-1 rounded-full border border-emerald-800/50">
             {room?.code}
           </span>
+          <button
+            onClick={handleCopyInvite}
+            title="Копировать ссылку приглашения"
+            className={`p-1.5 rounded-full transition ${
+              inviteCopied
+                ? 'bg-emerald-600 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700'
+            }`}
+          >
+            {inviteCopied ? <CheckCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
           <div>
             <h1 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
               Раунд {room?.round_number || 1} • <span className="text-emerald-400">{room?.phase}</span>
